@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cutline — SVG cutter workspace</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3f8; --panel: #ffffff; --panel-soft: #f7faff; --line: #d9e3ee; --line-strong: #c7d5e4;
+      --text: #18304b; --muted: #6f8298; --blue: #1769d0; --blue-dark: #0e4fa5; --blue-soft: #e9f2ff;
+      --green: #1d9b68; --orange: #d88315; --red: #c44949; --shadow: 0 14px 34px rgba(36, 75, 116, .10);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--bg); color: var(--text); font: 14px/1.45 Inter, "Segoe UI", Roboto, Arial, sans-serif; }
+    button, input, select { font: inherit; } button { cursor: pointer; }
+    .app { max-width: 1480px; margin: 0 auto; padding: 24px 30px 38px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 28px; margin-bottom: 22px; }
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: #fff; background: var(--blue); font-weight: 800; letter-spacing: -.08em; box-shadow: 0 6px 14px rgba(23, 105, 208, .28); }
+    .brand h1 { margin: 0; font-size: 21px; letter-spacing: -.03em; } .brand p { margin: 1px 0 0; color: var(--muted); font-size: 12px; }
+    .device-status { display: flex; align-items: center; gap: 10px; color: var(--muted); } .status-light { width: 9px; height: 9px; border-radius: 50%; background: #aab9c7; box-shadow: 0 0 0 4px #aab9c71c; } .status-light.ready { background: var(--green); box-shadow: 0 0 0 4px #1d9b681c; }
+    .top-actions { display: flex; align-items: center; gap: 12px; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 20px; align-items: start; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow); }
+    .canvas-card { overflow: hidden; } .card-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+    .card-head h2 { margin: 0; font-size: 14px; letter-spacing: -.01em; } .subtle { color: var(--muted); font-size: 12px; }
+    .canvas-wrap { position: relative; min-height: 690px; display: grid; place-items: center; padding: 28px; background-color: #f7fafd; background-image: linear-gradient(#dbe5f0 1px, transparent 1px), linear-gradient(90deg, #dbe5f0 1px, transparent 1px); background-size: 28px 28px; }
+    svg#preview { width: 100%; max-width: 980px; aspect-ratio: 1.35; overflow: visible; }
+    .sheet { fill: #fff; stroke: #adbed0; stroke-width: 1.2; filter: drop-shadow(0 6px 8px rgba(65, 99, 132, .12)); } .cut { fill: none; stroke: var(--blue); stroke-width: 2.4; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; } .cut.original { stroke: #8ab2e4; stroke-dasharray: 5 5; stroke-width: 1.25; } .cut.overcut { stroke: var(--orange); stroke-width: 3; } .cut-point { fill: var(--green); stroke: white; stroke-width: 1.5; } .sheet-label { fill: #91a5ba; font-size: 12px; letter-spacing: .04em; }
+    .empty-state { display: none; position: absolute; inset: 0; place-items: center; pointer-events: none; color: var(--muted); text-align: center; } .empty-state.visible { display: grid; }
+    .drop-zone { padding: 21px; border: 1px dashed #9cb4ce; border-radius: 11px; background: #f5f9ff; text-align: center; transition: border .15s, background .15s; } .drop-zone.dragover { border-color: var(--blue); background: var(--blue-soft); } .drop-zone strong { display: block; margin-bottom: 4px; color: var(--text); } .drop-zone span { display: block; color: var(--muted); font-size: 12px; } .drop-zone input { display: none; } .drop-zone label { display: inline-flex; margin-top: 12px; color: var(--blue); font-weight: 700; cursor: pointer; }
+    .canvas-foot { display: flex; justify-content: space-between; gap: 16px; padding: 11px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    .inspector { padding: 0 18px 18px; } .section { padding: 19px 0; border-bottom: 1px solid var(--line); } .section:last-child { border-bottom: 0; padding-bottom: 0; }
+    .section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 14px; color: var(--text); font-size: 12px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; } .section-title small { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+    .field { margin-bottom: 12px; } .field:last-child { margin-bottom: 0; } .field label { display: block; margin: 0 0 6px; color: #62788f; font-size: 12px; font-weight: 600; }
+    input[type="number"], select { width: 100%; height: 38px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; outline: none; background: #fff; color: var(--text); transition: border .15s, box-shadow .15s; } input[type="number"]:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #1769d01b; }
+    .grid2, .grid3 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .check-row { display: flex; align-items: flex-start; gap: 9px; margin-top: 11px; color: var(--text); font-size: 12px; } .check-row input { width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--blue); } .check-row span { display: block; } .check-row em { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-style: normal; }
+    .hint { margin: 8px 0 0; color: var(--muted); font-size: 11px; } .file-name { margin: 10px 0 0; color: var(--blue-dark); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .button-row { display: flex; gap: 9px; } button { min-height: 38px; padding: 8px 13px; border: 1px solid transparent; border-radius: 8px; font-weight: 700; transition: transform .15s, box-shadow .15s, background .15s; } button:hover { transform: translateY(-1px); } button:active { transform: translateY(0); } button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+    .primary { width: 100%; margin-top: 11px; color: white; background: var(--blue); box-shadow: 0 5px 12px rgba(23, 105, 208, .2); } .primary:hover { background: var(--blue-dark); } .secondary { flex: 1; color: var(--blue-dark); background: var(--blue-soft); border-color: #c4daf6; } .outline { color: var(--blue-dark); background: white; border-color: var(--line-strong); } .stop { color: #aa3333; background: #fff5f3; border-color: #f2ceca; }
+    .log { height: 142px; overflow: auto; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #f7f9fc; color: #61758c; font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; }
+    .stats { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; } .stat { padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: #fbfdff; font-size: 11px; } .stat strong { color: var(--text); }
+    .warning { padding: 10px 11px; border: 1px solid #f3d8aa; border-radius: 8px; color: #93601a; background: #fff9ed; font-size: 11px; }
+    @media (max-width: 1000px) { .workspace { grid-template-columns: 1fr; } .inspector { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 22px; } .section:last-child { grid-column: 1 / -1; } }
+    @media (max-width: 680px) { .app { padding: 17px 13px 28px; } .topbar { display: block; } .top-actions { margin-top: 15px; justify-content: space-between; } .canvas-wrap { min-height: 420px; padding: 14px; } .inspector { display: block; } .canvas-foot { display: block; } .canvas-foot span + span { display: block; margin-top: 5px; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar"><div class="brand"><div class="brand-mark">CL</div><div><h1>Cutline</h1><p>Рабочее место для точной резки</p></div></div><div class="top-actions"><div class="device-status"><span id="statusLight" class="status-light"></span><span id="statusText">Плоттер не подключён</span></div><button id="connectBtn" class="outline">Подключить COM</button></div></header>
+    <div class="workspace">
+      <section class="card canvas-card">
+        <div class="card-head"><div><h2>Предпросмотр макета</h2><span id="previewMeta" class="subtle">Тестовый контур готов</span></div><span id="unitMeta" class="subtle">мм</span></div>
+        <div id="canvasWrap" class="canvas-wrap"><svg id="preview" viewBox="0 0 1000 700" role="img" aria-label="Предпросмотр резки SVG"><rect class="sheet" x="62" y="45" width="876" height="610" rx="2" /><g id="previewOriginal"></g><g id="previewCut"></g><g id="previewMarkers"></g><text id="sheetLabel" class="sheet-label" x="500" y="680" text-anchor="middle"></text></svg><div id="emptyState" class="empty-state"><div><strong>Загрузите SVG, чтобы увидеть контур</strong><br><span>Поддерживаются path, rect, circle, ellipse, line, polyline и polygon</span></div></div></div>
+        <div class="canvas-foot"><span id="fileCaption">Встроенный тестовый квадрат · можно сразу проверить команды</span><span id="coordinateCaption">Начало координат: левый верхний угол листа</span></div>
+      </section>
+      <aside class="card inspector">
+        <section class="section"><h2 class="section-title">01 / Контур <small>SVG</small></h2><div id="dropZone" class="drop-zone"><strong>Перетащите SVG сюда</strong><span>или выберите файл с компьютера</span><label for="fileInput">Выбрать SVG</label><input id="fileInput" type="file" accept=".svg,image/svg+xml" /></div><div id="fileName" class="file-name">Тестовый контур</div><div id="stats" class="stats"><span class="stat"><strong id="pathCount">1</strong> контур</span><span class="stat"><strong id="segmentCount">4</strong> сегмента</span><span class="stat"><strong id="designSize">80 × 50</strong> мм</span></div></section>
+        <section class="section"><h2 class="section-title">02 / Лист и размещение <small>точность</small></h2><div class="grid2"><div class="field"><label for="sheetWidth">Ширина листа, мм</label><input id="sheetWidth" type="number" value="210" min="10" max="2000" step="1" /></div><div class="field"><label for="sheetHeight">Высота листа, мм</label><input id="sheetHeight" type="number" value="297" min="10" max="2000" step="1" /></div></div><div class="grid2"><div class="field"><label for="scale">Масштаб</label><input id="scale" type="number" value="1" min="0.01" max="100" step="0.01" /></div><div class="field"><label for="rotation">Поворот</label><select id="rotation"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></div></div><div class="field"><label for="origin">Начало координат</label><select id="origin"><option value="top-left">Левый верхний угол</option><option value="bottom-left">Левый нижний угол</option><option value="center">Центр листа</option></select></div><label class="check-row"><input id="fitToSheet" type="checkbox" checked /><span>Вписать в рабочую область<em>Сохраняет пропорции и оставляет поле 10 мм</em></span></label></section>
+        <section class="section"><h2 class="section-title">03 / Нож и траектория <small>компенсация</small></h2><div class="grid2"><div class="field"><label for="knifeOffset">Компенсация ножа, мм</label><input id="knifeOffset" type="number" value="0" min="0" max="5" step="0.01" /></div><div class="field"><label for="bladeExtension">Вылет ножа, мм</label><input id="bladeExtension" type="number" value="0.5" min="0" max="5" step="0.1" /></div></div><div class="grid2"><div class="field"><label for="overcut">Overcut, мм</label><input id="overcut" type="number" value="0.3" min="0" max="10" step="0.1" /></div><div class="field"><label for="tolerance">Допуск, мм</label><input id="tolerance" type="number" value="0.15" min="0.02" max="2" step="0.01" /></div></div><label class="check-row"><input id="showStart" type="checkbox" checked /><span>Показывать точки старта<em>Зелёная точка — начало прохода, оранжевый — overcut</em></span></label><p class="hint">Вылет ножа выставляется механически на каретке. Поле сохраняет его в профиле и помогает не забыть настройку; векторная компенсация задаётся отдельно.</p></section>
+        <section class="section"><h2 class="section-title">04 / Протокол и резка <small>COM</small></h2><div class="grid2"><div class="field"><label for="protocol">Язык команд</label><select id="protocol"><option value="HPGL">HPGL</option><option value="DMPL">DMPL</option></select></div><div class="field"><label for="resolution">Шаг координат</label><select id="resolution"><option value="40">0,025 мм</option><option value="100">0,010 мм</option><option value="20">0,050 мм</option></select></div></div><div class="grid3"><div class="field"><label for="baud">Baud</label><select id="baud"><option>9600</option><option>19200</option><option>38400</option><option>115200</option></select></div><div class="field"><label for="speed">Скорость</label><input id="speed" type="number" value="120" min="1" max="600" step="1" /></div><div class="field"><label for="force">Усилие</label><input id="force" type="number" value="12" min="1" max="100" step="1" /></div></div><div class="warning">Перед первым проходом поднимите нож или установите перо. Сделайте пробную резку на обрезке материала.</div><div class="button-row" style="margin-top: 12px"><button id="previewBtn" class="secondary">Показать команды</button><button id="stopBtn" class="stop">Стоп</button></div><button id="sendBtn" class="primary">Отправить траекторию</button></section>
+        <section class="section"><h2 class="section-title">Журнал <small>состояние</small></h2><div id="log" class="log">Готово. Импортируйте SVG или проверьте встроенный квадрат.</div></section>
+      </aside>
+    </div>
+  </main>
+  <script>
+    'use strict';
+    const $ = id => document.getElementById(id);
+    const state = { contours: [{ points: [[0, 0], [80, 0], [80, 50], [0, 50]], closed: true, source: 'Тестовый квадрат' }], originalContours: null, fileName: 'Тестовый контур', designWidth: 80, designHeight: 50, port: null, writer: null, commandText: '' };
+    const log = message => { $('log').textContent += '\n' + message; $('log').scrollTop = $('log').scrollHeight; };
+    const num = (id, fallback) => { const value = Number($(id).value); return Number.isFinite(value) ? value : fallback; }; const clamp = (value, min, max) => Math.max(min, Math.min(max, value)); const fmt = value => Number(value.toFixed(2)); const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]); const add = (a, b) => [a[0] + b[0], a[1] + b[1]]; const sub = (a, b) => [a[0] - b[0], a[1] - b[1]]; const mul = (a, s) => [a[0] * s, a[1] * s]; const unit = a => { const length = Math.hypot(a[0], a[1]) || 1; return [a[0] / length, a[1] / length]; };
+    function matrixMultiply(a, b) { return [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3], a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]]; }
+    function applyMatrix(m, point) { return [m[0] * point[0] + m[2] * point[1] + m[4], m[1] * point[0] + m[3] * point[1] + m[5]]; }
+    function parseTransform(value) { let result = [1, 0, 0, 1, 0, 0]; const re = /([a-z]+)\s*\(([^)]*)\)/gi; let match; while ((match = re.exec(value || ''))) { const parts = match[2].split(/[ ,]+/).filter(Boolean).map(Number); let next = [1, 0, 0, 1, 0, 0]; if (match[1] === 'matrix' && parts.length >= 6) next = parts.slice(0, 6); if (match[1] === 'translate') next = [1, 0, 0, 1, parts[0] || 0, parts[1] || 0]; if (match[1] === 'scale') next = [parts[0] || 1, 0, 0, parts.length > 1 ? parts[1] : (parts[0] || 1), 0, 0]; if (match[1] === 'rotate') { const angle = (parts[0] || 0) * Math.PI / 180, c = Math.cos(angle), s = Math.sin(angle); next = [c, s, -s, c, 0, 0]; } if (match[1] === 'skewX') next = [1, 0, Math.tan((parts[0] || 0) * Math.PI / 180), 1, 0, 0]; if (match[1] === 'skewY') next = [1, Math.tan((parts[0] || 0) * Math.PI / 180), 0, 1, 0, 0]; result = matrixMultiply(result, next); } return result; }
+    function pushLine(point, target, tolerance) { const last = target[target.length - 1]; if (!last || dist(last, point) >= tolerance / 3) target.push(point); }
+    function cubic(p0, p1, p2, p3, t) { const u = 1 - t; return [u ** 3 * p0[0] + 3 * u ** 2 * t * p1[0] + 3 * u * t ** 2 * p2[0] + t ** 3 * p3[0], u ** 3 * p0[1] + 3 * u ** 2 * t * p1[1] + 3 * u * t ** 2 * p2[1] + t ** 3 * p3[1]]; }
+    function quadratic(p0, p1, p2, t) { const u = 1 - t; return [u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]]; }
+    function sampleCubic(out, p0, p1, p2, p3, tolerance) { const steps = clamp(Math.ceil((dist(p0, p1) + dist(p1, p2) + dist(p2, p3)) / Math.max(tolerance, .05)), 4, 220); for (let i = 1; i <= steps; i++) pushLine(cubic(p0, p1, p2, p3, i / steps), out, tolerance); }
+    function sampleQuadratic(out, p0, p1, p2, tolerance) { const steps = clamp(Math.ceil((dist(p0, p1) + dist(p1, p2)) / Math.max(tolerance, .05)), 3, 160); for (let i = 1; i <= steps; i++) pushLine(quadratic(p0, p1, p2, i / steps), out, tolerance); }
+    function sampleArc(out, p0, rx, ry, angle, large, sweep, p1, tolerance) { rx = Math.abs(rx); ry = Math.abs(ry); if (!rx || !ry) { pushLine(p1, out, tolerance); return; } const radians = angle * Math.PI / 180, cos = Math.cos(radians), sin = Math.sin(radians), dx = (p0[0] - p1[0]) / 2, dy = (p0[1] - p1[1]) / 2, x1 = cos * dx + sin * dy, y1 = -sin * dx + cos * dy, lambda = x1 * x1 / (rx * rx) + y1 * y1 / (ry * ry); if (lambda > 1) { const k = Math.sqrt(lambda); rx *= k; ry *= k; } const sign = large === sweep ? -1 : 1, coef = sign * Math.sqrt(Math.max(0, (rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1) / (rx * rx * y1 * y1 + ry * ry * x1 * x1 || 1))), cx1 = coef * rx * y1 / ry, cy1 = coef * -ry * x1 / rx, cx = cos * cx1 - sin * cy1 + (p0[0] + p1[0]) / 2, cy = sin * cx1 + cos * cy1 + (p0[1] + p1[1]) / 2; const vectorAngle = (u, v) => Math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1]); const start = vectorAngle([1, 0], [(x1 - cx1) / rx, (y1 - cy1) / ry]); let delta = vectorAngle([(x1 - cx1) / rx, (y1 - cy1) / ry], [(-x1 - cx1) / rx, (-y1 - cy1) / ry]); if (!sweep && delta > 0) delta -= Math.PI * 2; if (sweep && delta < 0) delta += Math.PI * 2; const steps = clamp(Math.ceil(Math.abs(delta) * Math.max(rx, ry) / Math.max(tolerance, .05)), 6, 300); for (let i = 1; i <= steps; i++) { const t = start + delta * i / steps; pushLine([cx + rx * Math.cos(t) * cos - ry * Math.sin(t) * sin, cy + rx * Math.cos(t) * sin + ry * Math.sin(t) * cos], out, tolerance); } }
+    function tokenizePath(d) { return d.match(/[a-z]|[-+]?(?:\d*\.\d+|\d+\.?)(?:e[-+]?\d+)?/gi) || []; }
+    function parsePath(d, tolerance) { const tokens = tokenizePath(d); let i = 0, command = '', current = [0, 0], start = [0, 0], lastControl = null, points = [], closed = false; const isCommand = token => /^[a-z]$/i.test(token); const read = () => Number(tokens[i++]); const xy = (x, y) => command === command.toLowerCase() ? [current[0] + x, current[1] + y] : [x, y]; while (i < tokens.length) { if (isCommand(tokens[i])) command = tokens[i++]; if (!command) { i++; continue; } const type = command.toUpperCase(); if (type === 'Z') { pushLine(start, points, tolerance); current = start; closed = true; command = ''; continue; } if (type === 'M' || type === 'L' || type === 'T') { if (i + 1 >= tokens.length || isCommand(tokens[i])) { command = ''; continue; } const p = xy(read(), read()); if (type === 'M') { current = p; start = p; pushLine(p, points, tolerance); command = command === command.toLowerCase() ? 'l' : 'L'; } else { pushLine(p, points, tolerance); current = p; } lastControl = null; continue; } if (type === 'H' || type === 'V') { if (i >= tokens.length || isCommand(tokens[i])) { command = ''; continue; } const value = read(), relative = command === command.toLowerCase(), p = type === 'H' ? (relative ? [current[0] + value, current[1]] : [value, current[1]]) : (relative ? [current[0], current[1] + value] : [current[0], value]); pushLine(p, points, tolerance); current = p; lastControl = null; continue; } if (type === 'C') { if (i + 5 >= tokens.length || isCommand(tokens[i])) { command = ''; continue; } const p1 = xy(read(), read()), p2 = xy(read(), read()), p = xy(read(), read()); sampleCubic(points, current, p1, p2, p, tolerance); current = p; lastControl = p2; continue; } if (type === 'S') { if (i + 3 >= tokens.length || isCommand(tokens[i])) { command = ''; continue; } const p1 = lastControl ? sub(mul(current, 2), lastControl) : current, p2 = xy(read(), read()), p = xy(read(), read()); sampleCubic(points, current, p1, p2, p, tolerance); current = p; lastControl = p2; continue; } if (type === 'Q') { if (i + 3 >= tokens.length || isCommand(tokens[i])) { command = ''; continue; } const p1 = xy(read(), read()), p = xy(read(), read()); sampleQuadratic(points, current, p1, p, tolerance); current = p; lastControl = p1; continue; } if (type === 'A') { if (i + 6 >= tokens.length || isCommand(tokens[i])) { command = ''; continue; } const rx = read(), ry = read(), angle = read(), large = read() ? 1 : 0, sweep = read() ? 1 : 0, p = xy(read(), read()); sampleArc(points, current, rx, ry, angle, large, sweep, p, tolerance); current = p; lastControl = null; continue; } command = ''; } return points.length > 1 ? { points, closed: closed || dist(points[0], points[points.length - 1]) < tolerance } : null; }
+    function parsePathList(d, tolerance) { const tokens = tokenizePath(d), chunks = []; let chunk = []; tokens.forEach(token => { if (/^m$/i.test(token) && chunk.length) { chunks.push(chunk); chunk = []; } chunk.push(token); }); if (chunk.length) chunks.push(chunk); return chunks.map(items => parsePath(items.join(' '), tolerance)).filter(Boolean); }
+    function parseLength(value, fallback) { const match = String(value || '').trim().match(/^([\d.+-]+)\s*(mm|cm|in|pt|pc|px)?$/i); if (!match) return fallback; const n = Number(match[1]), unit = (match[2] || 'px').toLowerCase(); return n * ({ mm: 1, cm: 10, in: 25.4, pt: 25.4 / 72, pc: 25.4 / 6, px: 25.4 / 96 }[unit] || 1); }
+    function boundsOf(contours) { const all = contours.flatMap(c => c.points); const xs = all.map(p => p[0]), ys = all.map(p => p[1]); return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }; }
+    function rectPoints(x, y, width, height, rx = 0, ry = rx, tolerance = .15) { if (!rx && !ry) return { points: [[x, y], [x + width, y], [x + width, y + height], [x, y + height]], closed: true }; const path = `M ${x + rx} ${y} H ${x + width - rx} A ${rx} ${ry} 0 0 1 ${x + width} ${y + ry} V ${y + height - ry} A ${rx} ${ry} 0 0 1 ${x + width - rx} ${y + height} H ${x + rx} A ${rx} ${ry} 0 0 1 ${x} ${y + height - ry} V ${y + ry} A ${rx} ${ry} 0 0 1 ${x + rx} ${y} Z`; return parsePath(path, tolerance); }
+    function shapeToContour(node, tolerance) { const tag = node.tagName.toLowerCase(), attr = name => Number(node.getAttribute(name) || 0); if (tag === 'path') return parsePath(node.getAttribute('d') || '', tolerance); if (tag === 'rect') return rectPoints(attr('x'), attr('y'), attr('width'), attr('height'), attr('rx'), attr('ry') || attr('rx'), tolerance); if (tag === 'line') return { points: [[attr('x1'), attr('y1')], [attr('x2'), attr('y2')]], closed: false }; if (tag === 'polyline' || tag === 'polygon') { const values = (node.getAttribute('points') || '').trim().split(/[ ,]+/).filter(Boolean).map(Number), points = []; for (let i = 0; i + 1 < values.length; i += 2) points.push([values[i], values[i + 1]]); return points.length > 1 ? { points, closed: tag === 'polygon' } : null; } if (tag === 'circle' || tag === 'ellipse') { const cx = attr('cx'), cy = attr('cy'), rx = tag === 'circle' ? attr('r') : attr('rx'), ry = tag === 'circle' ? attr('r') : attr('ry'), points = []; const count = clamp(Math.ceil(Math.PI * 2 * Math.max(rx, ry) / Math.max(tolerance, .05)), 24, 720); for (let i = 0; i < count; i++) { const a = Math.PI * 2 * i / count; points.push([cx + rx * Math.cos(a), cy + ry * Math.sin(a)]); } return { points, closed: true }; } return null; }
+    function extractSvgContours(svgText) { const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml'), root = doc.documentElement; if (!root || root.nodeName.toLowerCase() === 'parsererror') throw new Error('Файл не является корректным SVG'); const viewBox = (root.getAttribute('viewBox') || '').trim().split(/[ ,]+/).map(Number); if (viewBox.length !== 4 || !viewBox.every(Number.isFinite)) throw new Error('У SVG отсутствует корректный viewBox'); const tolerance = num('tolerance', .15), widthMm = parseLength(root.getAttribute('width'), viewBox[2] * 25.4 / 96), heightMm = parseLength(root.getAttribute('height'), viewBox[3] * 25.4 / 96), sx = widthMm / viewBox[2], sy = heightMm / viewBox[3], found = []; function walk(node, parentMatrix) { const matrix = matrixMultiply(parentMatrix, parseTransform(node.getAttribute && node.getAttribute('transform'))), shapes = node.tagName && node.tagName.toLowerCase() === 'path' ? parsePathList(node.getAttribute('d') || '', tolerance) : [shapeToContour(node, tolerance)]; shapes.filter(Boolean).forEach(contour => found.push({ points: contour.points.map(p => { const transformed = applyMatrix(matrix, p); return [(transformed[0] - viewBox[0]) * sx, (transformed[1] - viewBox[1]) * sy]; }), closed: contour.closed })); Array.from(node.children || []).forEach(child => walk(child, matrix)); } walk(root, [1, 0, 0, 1, 0, 0]); if (!found.length) throw new Error('Не найдено ни одного контура'); const bounds = boundsOf(found); return { contours: found.map(c => ({ ...c, points: c.points.map(p => [p[0] - bounds.minX, p[1] - bounds.minY]) })), width: bounds.width, height: bounds.height }; }
+    function normalizeContour(contour) { const points = contour.points.slice(); if (points.length > 1 && dist(points[0], points[points.length - 1]) < .001) points.pop(); return { ...contour, points }; }
+    function lineIntersection(p1, p2, p3, p4) { const x1 = p1[0], y1 = p1[1], x2 = p2[0], y2 = p2[1], x3 = p3[0], y3 = p3[1], x4 = p4[0], y4 = p4[1], den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4); if (Math.abs(den) < 1e-9) return null; const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den; return [x1 + t * (x2 - x1), y1 + t * (y2 - y1)]; }
+    function offsetContour(points, amount) { if (!amount || points.length < 3) return points.map(p => p.slice()); let area = 0; for (let i = 0; i < points.length; i++) { const a = points[i], b = points[(i + 1) % points.length]; area += a[0] * b[1] - b[0] * a[1]; } const outward = area > 0 ? 1 : -1, segments = []; for (let i = 0; i < points.length; i++) { const a = points[i], b = points[(i + 1) % points.length], direction = unit(sub(b, a)), normal = [direction[1] * outward, -direction[0] * outward]; segments.push([add(a, mul(normal, amount)), add(b, mul(normal, amount))]); } return points.map((_, i) => lineIntersection(...segments[(i + points.length - 1) % points.length], ...segments[i]) || points[i]); }
+    function transformedContours() { const sheetW = num('sheetWidth', 210), sheetH = num('sheetHeight', 297), scale = num('scale', 1), angle = Number($('rotation').value), radians = angle * Math.PI / 180, rawW = state.designWidth * scale, rawH = state.designHeight * scale, rotatedW = angle % 180 ? rawH : rawW, rotatedH = angle % 180 ? rawW : rawH, fit = $('fitToSheet').checked ? Math.min((sheetW - 20) / Math.max(rotatedW, .001), (sheetH - 20) / Math.max(rotatedH, .001), 1) : 1, placedW = rotatedW * fit, placedH = rotatedH * fit, left = (sheetW - placedW) / 2, top = (sheetH - placedH) / 2, offset = num('knifeOffset', 0), result = []; state.contours.forEach(contour => { let points = normalizeContour(contour).points.map(p => [p[0] * scale, p[1] * scale]); if (contour.closed) points = offsetContour(points, offset); const mapped = points.map(p => { const x = p[0] * fit, y = p[1] * fit; let rx = x, ry = y; if (angle === 90) { rx = rawH * fit - y; ry = x; } if (angle === 180) { rx = rawW * fit - x; ry = rawH * fit - y; } if (angle === 270) { rx = y; ry = rawW * fit - x; } return [left + rx, top + ry]; }); result.push({ ...contour, points: mapped }); }); return result; }
+    function withOvercut(contour) { const points = contour.points.map(p => p.slice()), length = num('overcut', .3); if (!contour.closed || points.length < 3 || !length) return { ...contour, points, overcutPoint: null }; const tangent = unit(sub(points[1], points[0])), end = add(points[0], mul(tangent, length)); return { ...contour, points: [...points, points[0], end], overcutPoint: end }; }
+    function drawPolyline(group, points, className) { const element = document.createElementNS('http://www.w3.org/2000/svg', 'polyline'); element.setAttribute('class', className); element.setAttribute('points', points.map(p => `${fmt(p[0])},${fmt(p[1])}`).join(' ')); group.appendChild(element); }
+    function renderPreview() { const sheetW = num('sheetWidth', 210), sheetH = num('sheetHeight', 297), previewContours = transformedContours().map(withOvercut), scaleX = 876 / sheetW, scaleY = 610 / sheetH, map = p => [62 + p[0] * scaleX, 45 + p[1] * scaleY]; $('previewOriginal').replaceChildren(); $('previewCut').replaceChildren(); $('previewMarkers').replaceChildren(); transformedContours().forEach((mapped, i) => { const source = state.contours[i]; drawPolyline($('previewOriginal'), mapped.points.concat(source.closed ? [mapped.points[0]] : []).map(map), 'cut original'); }); previewContours.forEach(contour => { drawPolyline($('previewCut'), contour.points.map(map), 'cut'); if (contour.overcutPoint) drawPolyline($('previewCut'), [map(contour.points[contour.points.length - 2]), map(contour.overcutPoint)], 'cut overcut'); if ($('showStart').checked) { const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); marker.setAttribute('class', 'cut-point'); marker.setAttribute('cx', map(contour.points[0])[0]); marker.setAttribute('cy', map(contour.points[0])[1]); marker.setAttribute('r', 5); $('previewMarkers').appendChild(marker); } }); $('sheetLabel').textContent = `${fmt(sheetW)} × ${fmt(sheetH)} мм · ${previewContours.length} контур(а)`; $('previewMeta').textContent = `${previewContours.length} контур(а) · компенсация ${fmt(num('knifeOffset', 0))} мм · overcut ${fmt(num('overcut', .3))} мм`; $('coordinateCaption').textContent = `Начало координат: ${$('origin').selectedOptions[0].textContent.toLowerCase()}`; const allSegments = state.contours.reduce((sum, c) => sum + Math.max(0, c.points.length - 1) + (c.closed ? 1 : 0), 0); $('pathCount').textContent = state.contours.length; $('segmentCount').textContent = allSegments; $('designSize').textContent = `${fmt(state.designWidth)} × ${fmt(state.designHeight)}`; }
+    function pointsForCommands() { return transformedContours().map(withOvercut); } function toDevicePoint(point) { const resolution = num('resolution', 40), sheetH = num('sheetHeight', 297), origin = $('origin').value; let x = point[0], y = point[1]; if (origin === 'bottom-left') y = sheetH - y; if (origin === 'center') { x -= num('sheetWidth', 210) / 2; y = num('sheetHeight', 297) / 2 - y; } return [Math.round(x * resolution), Math.round(y * resolution)]; }
+    function hpgl(commandsContours) { const speed = Math.round(num('speed', 120) / 10), force = Math.round(num('force', 12)), lines = ['IN;', `VS${speed};`, `FS${force};`, 'SP1;']; commandsContours.forEach(contour => { const points = contour.points.map(toDevicePoint); if (!points.length) return; lines.push(`PU${points[0][0]},${points[0][1]};`); if (points.length > 1) lines.push(`PD${points.slice(1).map(p => p.join(',')).join(',')};`); lines.push('PU;'); }); lines.push('SP0;'); return lines.join('\n'); }
+    function dmpl(commandsContours) { const lines = ['H;']; commandsContours.forEach(contour => { const points = contour.points.map(toDevicePoint); if (!points.length) return; lines.push(`M${points[0][0]},${points[0][1]};`); if (points.length > 1) lines.push(`D${points.slice(1).map(p => p.join(',')).join(',')};`); lines.push('U;'); }); return lines.join('\n'); }
+    function createCommands() { const processed = pointsForCommands(); return $('protocol').value === 'HPGL' ? hpgl(processed) : dmpl(processed); } function showCommands() { state.commandText = createCommands(); log(`--- ${$('protocol').value} · ${state.commandText.split('\n').length} строк ---\n${state.commandText}`); }
+    async function connectSerial() { if (!('serial' in navigator)) { log('Web Serial недоступен. Откройте страницу в Chrome/Edge через localhost.'); return; } try { if (state.writer) await disconnectSerial(); state.port = await navigator.serial.requestPort(); await state.port.open({ baudRate: Number($('baud').value), dataBits: 8, stopBits: 1, parity: 'none', bufferSize: 255, flowControl: 'none' }); state.writer = state.port.writable.getWriter(); $('statusLight').classList.add('ready'); $('statusText').textContent = 'Плоттер подключён'; $('connectBtn').textContent = 'Переподключить'; log(`COM-порт открыт: ${$('baud').value} baud`); } catch (error) { log(`Подключение отменено или не удалось: ${error.message}`); } }
+    async function disconnectSerial() { try { if (state.writer) { state.writer.releaseLock(); state.writer = null; } if (state.port) { await state.port.close(); state.port = null; } } catch (error) { log(`Порт закрыт с предупреждением: ${error.message}`); } $('statusLight').classList.remove('ready'); $('statusText').textContent = 'Плоттер не подключён'; }
+    async function sendCommands() { showCommands(); if (!state.writer) { log('Траектория не отправлена: сначала подключите COM-порт.'); return; } try { await state.writer.write(new TextEncoder().encode(`${state.commandText}\r\n`)); log(`Отправлено: ${state.commandText.split('\n').length} строк, ${state.contours.length} контур(а).`); } catch (error) { log(`Ошибка отправки: ${error.message}`); } }
+    async function stopPlotter() { if (!state.writer) { log('Порт не подключён.'); return; } try { await state.writer.write(new TextEncoder().encode('!\r\n')); log('Команда остановки отправлена.'); } catch (error) { log(`Не удалось отправить стоп: ${error.message}`); } }
+    function importSvg(file) { if (!file || !file.name.toLowerCase().endsWith('.svg')) { log('Нужен файл SVG.'); return; } const reader = new FileReader(); reader.onload = () => { try { const imported = extractSvgContours(String(reader.result)); state.contours = imported.contours; state.originalContours = imported.contours; state.designWidth = imported.width; state.designHeight = imported.height; state.fileName = file.name; $('fileName').textContent = file.name; $('fileCaption').textContent = `SVG загружен · ${state.contours.length} контур(а) · готово к подготовке траектории`; $('emptyState').classList.remove('visible'); log(`SVG импортирован: ${file.name}; найдено контуров: ${state.contours.length}.`); renderPreview(); } catch (error) { log(`Ошибка импорта SVG: ${error.message}`); } }; reader.onerror = () => log('Не удалось прочитать файл SVG.'); reader.readAsText(file); }
+    $('fileInput').addEventListener('change', event => importSvg(event.target.files[0])); $('dropZone').addEventListener('dragover', event => { event.preventDefault(); $('dropZone').classList.add('dragover'); }); $('dropZone').addEventListener('dragleave', () => $('dropZone').classList.remove('dragover')); $('dropZone').addEventListener('drop', event => { event.preventDefault(); $('dropZone').classList.remove('dragover'); importSvg(event.dataTransfer.files[0]); }); $('connectBtn').addEventListener('click', connectSerial); $('sendBtn').addEventListener('click', sendCommands); $('stopBtn').addEventListener('click', stopPlotter); $('previewBtn').addEventListener('click', showCommands); ['sheetWidth', 'sheetHeight', 'scale', 'rotation', 'origin', 'fitToSheet', 'knifeOffset', 'bladeExtension', 'overcut', 'tolerance', 'showStart', 'protocol', 'resolution', 'speed', 'force'].forEach(id => $(id).addEventListener('input', renderPreview)); window.addEventListener('beforeunload', () => { if (state.writer) state.writer.releaseLock(); }); renderPreview();
+  </script>
+  <script>
+    // Позиционирование от текущей точки каретки: траектория не центрируется на листе.
+    (() => {
+      const origin = $('origin');
+      origin.insertBefore(new Option('Текущая точка плоттера', 'current'), origin.firstChild);
+      origin.value = 'current';
+      $('fitToSheet').checked = false;
+      const fitText = $('fitToSheet').closest('.check-row').querySelector('span');
+      fitText.firstChild.textContent = 'Вписать в рабочую область (не для текущей точки)';
+      fitText.querySelector('em').textContent = 'Включайте только при работе с абсолютным нулём листа';
+
+      transformedContours = function() {
+        const sheetW = num('sheetWidth', 210), sheetH = num('sheetHeight', 297), scale = num('scale', 1), angle = Number($('rotation').value), rawW = state.designWidth * scale, rawH = state.designHeight * scale, currentMode = $('origin').value === 'current';
+        const rotatedW = angle % 180 ? rawH : rawW, rotatedH = angle % 180 ? rawW : rawH, fit = $('fitToSheet').checked ? Math.min((sheetW - 20) / Math.max(rotatedW, .001), (sheetH - 20) / Math.max(rotatedH, .001), 1) : 1;
+        const placedW = rotatedW * fit, placedH = rotatedH * fit, left = currentMode ? 0 : (sheetW - placedW) / 2, top = currentMode ? 0 : (sheetH - placedH) / 2, offset = num('knifeOffset', 0), result = [];
+        state.contours.forEach(contour => { let points = normalizeContour(contour).points.map(p => [p[0] * scale, p[1] * scale]); if (contour.closed) points = offsetContour(points, offset); const mapped = points.map(p => { const x = p[0] * fit, y = p[1] * fit; let rx = x, ry = y; if (angle === 90) { rx = rawH * fit - y; ry = x; } if (angle === 180) { rx = rawW * fit - x; ry = rawH * fit - y; } if (angle === 270) { rx = y; ry = rawW * fit - x; } return [left + rx, top + ry]; }); result.push({ ...contour, points: mapped }); });
+        return result;
+      };
+
+      hpgl = function(commandsContours) {
+        const speed = Math.round(num('speed', 120) / 10), force = Math.round(num('force', 12)), relative = $('origin').value === 'current', lines = ['IN;', `VS${speed};`, `FS${force};`, 'SP1;'];
+        if (!relative) { lines.push('PA;'); commandsContours.forEach(contour => { const points = contour.points.map(toDevicePoint); if (!points.length) return; lines.push(`PU${points[0][0]},${points[0][1]};`); if (points.length > 1) lines.push(`PD${points.slice(1).map(p => p.join(',')).join(',')};`); lines.push('PU;'); }); lines.push('SP0;'); return lines.join('\n'); }
+        const deviceContours = commandsContours.map(contour => contour.points.map(toDevicePoint)), first = deviceContours.find(points => points.length)?.[0] || [0, 0];
+        let cursor = [0, 0]; lines.push('PR;');
+        deviceContours.forEach(points => { if (!points.length) return; const local = points.map(point => [point[0] - first[0], point[1] - first[1]]), startDelta = [local[0][0] - cursor[0], local[0][1] - cursor[1]]; if (startDelta[0] || startDelta[1]) lines.push(`PU${startDelta[0]},${startDelta[1]};`); const deltas = local.slice(1).map((point, index) => [point[0] - local[index][0], point[1] - local[index][1]]); if (deltas.length) lines.push(`PD${deltas.map(point => point.join(',')).join(',')};`); lines.push('PU;'); cursor = local[local.length - 1]; });
+        lines.push('PA;', 'SP0;'); return lines.join('\n');
+      };
+
+      sendCommands = async function() { if ($('origin').value === 'current' && $('protocol').value === 'DMPL') { log('DMPL остановлен: режим от текущей точки поддерживается безопасно только в HPGL/PR.'); return; } showCommands(); if (!state.writer) { log('Траектория не отправлена: сначала подключите COM-порт.'); return; } try { await state.writer.write(new TextEncoder().encode(`${state.commandText}\r\n`)); log(`Отправлено от текущей точки: ${state.commandText.split('\n').length} строк.`); } catch (error) { log(`Ошибка отправки: ${error.message}`); } };
+      renderPreview();
+    })();
+  </script>
+  <script>
+    // Явный PD нужен части китайских HPGL-контроллеров: PD с координатами они иногда трактуют только как движение.
+    const hpglWithExplicitPenDown = hpgl;
+    hpgl = contours => hpglWithExplicitPenDown(contours).replace(/\nPD/g, '\nPD;\nPD');
+  </script>
+  <script>
+    // DMPL отключён: для этого плоттера используем только проверенный HPGL.
+    const protocolSelect = $('protocol');
+    protocolSelect.replaceChildren(new Option('HPGL', 'HPGL'));
+    protocolSelect.value = 'HPGL';
+    protocolSelect.closest('.field').querySelector('label').textContent = 'Язык команд · HPGL';
+  </script>
+  <script>
+    // Малый тестовый контур и отдельная проверка механики пера без движения по листу.
+    state.contours = [{ points: [[0, 0], [20, 0], [20, 30], [0, 30]], closed: true, source: 'Тестовый прямоугольник 20 × 30 мм' }];
+    state.originalContours = null;
+    state.designWidth = 20;
+    state.designHeight = 30;
+    $('fileName').textContent = 'Тестовый прямоугольник 20 × 30 мм';
+    $('fileCaption').textContent = 'Тестовый прямоугольник 20 × 30 мм · старт от текущей точки каретки';
+    const penTestButton = document.createElement('button');
+    penTestButton.type = 'button';
+    penTestButton.className = 'outline';
+    penTestButton.textContent = 'Проверить опускание пера';
+    penTestButton.style.width = '100%';
+    penTestButton.style.marginTop = '9px';
+    $('sendBtn').after(penTestButton);
+    penTestButton.addEventListener('click', async () => {
+      if (!state.writer) { log('Тест пера не отправлен: сначала подключите COM-порт.'); return; }
+      try {
+        await state.writer.write(new TextEncoder().encode('SP1;PR;PD;\r\n'));
+        log('Перо опущено тестовой командой на 700 мс.');
+        await new Promise(resolve => setTimeout(resolve, 700));
+        await state.writer.write(new TextEncoder().encode('PU;PA;SP0;\r\n'));
+        log('Перо поднято после теста.');
+      } catch (error) { log(`Ошибка теста пера: ${error.message}`); }
+    });
+    renderPreview();
+  </script>
+  <script>
+    // Совместимость с рабочей старой последовательностью HPGL из cutter-test.
+    // Для этого контроллера не используем VS/FS/PR и отдельный PD без координат.
+    hpgl = function(commandsContours) {
+      const lines = ['IN;', 'SP1;'];
+      commandsContours.forEach(contour => {
+        const points = contour.points.map(toDevicePoint);
+        if (!points.length) return;
+        lines.push(`PU${points[0][0]},${points[0][1]};`);
+        if (points.length > 1) lines.push(`PD${points.slice(1).map(point => point.join(',')).join(',')};`);
+        lines.push('PU;');
+      });
+      lines.push('SP0;');
+      return lines.join('\n');
+    };
+    renderPreview();
+  </script>
+  <script>
+    // Обновляем диагностическую кнопку под тот же legacy-HPGL поток.
+    const oldPenTestButton = penTestButton;
+    const legacyPenTestButton = oldPenTestButton.cloneNode(true);
+    legacyPenTestButton.textContent = 'Проверить опускание пера в нуле';
+    oldPenTestButton.replaceWith(legacyPenTestButton);
+    legacyPenTestButton.addEventListener('click', async () => {
+      if (!state.writer) { log('Тест пера не отправлен: сначала подключите COM-порт.'); return; }
+      try {
+        await state.writer.write(new TextEncoder().encode('SP1;PU0,0;PD0,0;\r\n'));
+        log('Legacy HPGL: перо опущено в нулевой точке на 700 мс.');
+        await new Promise(resolve => setTimeout(resolve, 700));
+        await state.writer.write(new TextEncoder().encode('PU;\r\n'));
+        log('Перо поднято после теста.');
+      } catch (error) { log(`Ошибка теста пера: ${error.message}`); }
+    });
+  </script>
+  <script>
+    // Повторный запуск: сначала явно завершаем прошлый инструментальный цикл и даём контроллеру паузу.
+    const oldSendButton = $('sendBtn');
+    const repeatSafeSendButton = oldSendButton.cloneNode(true);
+    oldSendButton.replaceWith(repeatSafeSendButton);
+    let isSending = false;
+    repeatSafeSendButton.addEventListener('click', async () => {
+      if (isSending) { log('Отправка уже выполняется.'); return; }
+      showCommands();
+      if (!state.writer) { log('Траектория не отправлена: сначала подключите COM-порт.'); return; }
+      isSending = true;
+      repeatSafeSendButton.disabled = true;
+      try {
+        const encoder = new TextEncoder();
+        await state.writer.write(encoder.encode('PU;\r\n'));
+        await new Promise(resolve => setTimeout(resolve, 150));
+        await state.writer.write(encoder.encode(`${state.commandText}\r\n`));
+        log(`Отправлено повторно безопасным циклом: ${state.commandText.split('\n').length} строк.`);
+      } catch (error) { log(`Ошибка отправки: ${error.message}`); }
+      finally { isSending = false; repeatSafeSendButton.disabled = false; }
+    });
+  </script>
+  <script>
+    // Для повторной резки контроллеру нужны паузы между сбросом, выбором пера и геометрией.
+    const previousSendButton = $('sendBtn');
+    const stagedSendButton = previousSendButton.cloneNode(true);
+    previousSendButton.replaceWith(stagedSendButton);
+    let stagedSendActive = false;
+    const serialPause = ms => new Promise(resolve => setTimeout(resolve, ms));
+    stagedSendButton.addEventListener('click', async () => {
+      if (stagedSendActive) { log('Дождитесь завершения текущей отправки.'); return; }
+      showCommands();
+      if (!state.writer) { log('Траектория не отправлена: сначала подключите COM-порт.'); return; }
+      stagedSendActive = true;
+      stagedSendButton.disabled = true;
+      try {
+        const encoder = new TextEncoder();
+        const geometry = state.commandText.split('\n').filter(line => line && line !== 'IN;' && line !== 'SP1;').join('\n');
+        await state.writer.write(encoder.encode('PU;SP0;\r\n'));
+        await serialPause(200);
+        await state.writer.write(encoder.encode('IN;\r\n'));
+        await serialPause(350);
+        await state.writer.write(encoder.encode('SP1;\r\n'));
+        await serialPause(150);
+        await state.writer.write(encoder.encode(`${geometry}\r\n`));
+        await serialPause(800);
+        log('Цикл завершён: перо поднято через PU;SP0;. Повторная отправка готова.');
+      } catch (error) { log(`Ошибка отправки: ${error.message}`); }
+      finally { stagedSendActive = false; stagedSendButton.disabled = false; }
+    });
+  </script>
+</body>
+</html>

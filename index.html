@@ -848,6 +848,8 @@
                 type="number" value="0.5" min="0" max="5" step="0.01" /></div>
             <div class="field"><label for="overcut">Overcut, мм</label><input id="overcut" type="number" value="1"
                 min="0" max="10" step="0.1" /></div>
+            <div class="field"><label for="leadIn">Подъезд, мм</label><input id="leadIn" type="number" value="2" min="0"
+                max="50" step="0.1" /></div>
           </div>
           <div class="field"><label for="tolerance">Допуск, мм</label><input id="tolerance" type="number" value="0.15"
               min="0.02" max="2" step="0.01" /></div><label class="check-row"><input id="showStart" type="checkbox"
@@ -960,6 +962,7 @@
           resolution: num('resolution', 40),
           knifeOffset: Math.max(0, num('knifeOffset', .5)),
           overcut: Math.max(0, num('overcut', 1)),
+          leadIn: Math.max(0, num('leadIn', 2)),
           tolerance: Math.max(.02, num('tolerance', .15)),
           showStart: $('showStart').checked
         };
@@ -1061,7 +1064,45 @@
       }
 
       // ============================================================
-      // Компенсация вылета ножа + overcut. Строит траекторию оси держателя.
+      // Траектория оси держателя по траектории острия. Для каждого сегмента
+      // ось смещена на радиус вперёд по ходу движения (нож-«волокуша»:
+      // остриё отстаёт от держателя). В вершинах — дуга разворота ножа,
+      // а разворот на ~180° (возврат по резу) дугой не оформляется, чтобы
+      // остриё пошло назад по той же линии, а не в стороне.
+      // ============================================================
+      function offsetTip(tip, radius, tolerance, closed) {
+        const pts = tip.filter((p, i, arr) => !i || dist(p, arr[i - 1]) > 1e-7);
+        if (pts.length < 2 || radius <= 1e-7) return pts;
+        const segCount = closed ? pts.length : pts.length - 1;
+        const dirs = [], lens = [];
+        for (let i = 0; i < segCount; i++) {
+          const v = sub(pts[(i + 1) % pts.length], pts[i]);
+          const l = Math.hypot(v[0], v[1]);
+          if (l > 1e-7) { dirs.push(unit(v)); lens.push(l); }
+        }
+        if (!dirs.length) return pts;
+        const path = [add(pts[0], mul(dirs[0], radius))];
+        for (let i = 0; i < dirs.length; i++) {
+          const vertex = pts[(i + 1) % pts.length];
+          path.push(add(vertex, mul(dirs[i], radius)));
+          const hasNext = closed || i + 1 < dirs.length;
+          if (hasNext) {
+            const to = dirs[(i + 1) % dirs.length];
+            const sweep = Math.atan2(dirs[i][0] * to[1] - dirs[i][1] * to[0], dirs[i][0] * to[0] + dirs[i][1] * to[1]);
+            if (Math.abs(sweep) > Math.PI - 0.05) path.push(add(vertex, mul(to, radius)));
+            else if (Math.abs(sweep) >= KNIFE_TURN_MIN_RAD) appendKnifeTurn(path, vertex, radius, dirs[i], to, tolerance);
+          }
+        }
+        return path;
+      }
+
+      // ============================================================
+      // Компенсация вылета ножа + подъезд + overcut. Строит траекторию оси
+      // держателя. Замкнутый контур режется от крайней угловой точки (верх-лево):
+      // к ней делается прямой подъезд вдоль первого ребра длиной (overcut или
+      // вылет) — нож входит в отход и выравнивается до начала контура. Overcut
+      // проходит за угол по той же прямой и возвращается по ней же с пересчётом
+      // компенсации: остриё идёт по контуру, а не вбок, и не заходит внутрь.
       // ============================================================
       function withOvercut(contour) {
         const s = currentSettings();
@@ -1069,36 +1110,48 @@
         const radius = s.knifeOffset, overcut = s.overcut, tolerance = s.tolerance;
         const none = { ...contour, points: source, overcutPoint: null, overcutStartIndex: -1, overcutEndIndex: -1 };
         if (source.length < 2) return none;
-        const segmentCount = contour.closed ? source.length : source.length - 1;
-        const directions = [], lengths = [];
-        for (let i = 0; i < segmentCount; i++) {
-          const vector = sub(source[(i + 1) % source.length], source[i]);
-          const length = Math.hypot(vector[0], vector[1]);
-          if (length > 1e-7) { directions.push(unit(vector)); lengths.push(length); }
+
+        // Разомкнутый контур — просто компенсируем траекторию острия.
+        if (!contour.closed) return { ...contour, points: offsetTip(source, radius, tolerance, false), overcutPoint: null, overcutStartIndex: -1, overcutEndIndex: -1 };
+
+        // Замкнутый: старт — крайняя угловая вершина (самая верхняя, при
+        // равенстве — самая левая), чтобы подъезд уходил в отход, а не внутрь.
+        const n = source.length;
+        let start = 0;
+        for (let i = 1; i < n; i++) {
+          if (source[i][1] < source[start][1] - 1e-9 || (Math.abs(source[i][1] - source[start][1]) <= 1e-9 && source[i][0] < source[start][0])) start = i;
         }
-        if (!directions.length) return none;
-        const path = [add(source[0], mul(directions[0], radius))];
-        for (let i = 0; i < directions.length; i++) {
-          const vertex = source[(i + 1) % source.length];
-          path.push(add(vertex, mul(directions[i], radius)));
-          const hasNext = contour.closed || i + 1 < directions.length;
-          if (hasNext) appendKnifeTurn(path, vertex, radius, directions[i], directions[(i + 1) % directions.length], tolerance);
+        const src = source.slice(start).concat(source.slice(0, start));
+        const dirs = [], lens = [];
+        for (let i = 0; i < n; i++) {
+          const v = sub(src[(i + 1) % n], src[i]);
+          const l = Math.hypot(v[0], v[1]);
+          dirs.push(l > 1e-7 ? unit(v) : [1, 0]);
+          lens.push(l);
         }
+        const d0 = dirs[0], C = src[0];
+        const leadIn = s.leadIn;
+
+        // Подъезд (длина настраивается): прямая от точки в отходе (C - leadIn·d0)
+        // до угла C. Если 0 — начинаем сразу с угла.
+        const loopHolder = offsetTip(src, radius, tolerance, true);
+        let path;
+        if (leadIn > 1e-7) {
+          const leadHolder = offsetTip([sub(C, mul(d0, leadIn)), C], radius, tolerance, false);
+          path = leadHolder.concat(loopHolder.slice(1));
+        } else {
+          path = loopHolder;
+        }
+
         let overcutPoint = null, overcutStartIndex = -1, overcutEndIndex = -1;
-        if (contour.closed && overcut > 0) {
+        if (overcut > 1e-7) {
+          // Overcut: остриё уходит за угол по первому ребру (направление d0) и
+          // возвращается к углу — проходит точку замыкания начисто.
+          const overHolder = offsetTip([C, add(C, mul(d0, overcut)), C], radius, tolerance, false);
           overcutStartIndex = path.length - 1;
-          let remaining = overcut;
-          for (let i = 0; i < directions.length && remaining > 1e-7; i++) {
-            const travel = Math.min(remaining, lengths[i]);
-            const tip = add(source[i], mul(directions[i], travel));
-            path.push(add(tip, mul(directions[i], radius)));
-            remaining -= travel;
-            if (remaining > 1e-7 && travel >= lengths[i] - 1e-7) appendKnifeTurn(path, source[(i + 1) % source.length], radius, directions[i], directions[(i + 1) % directions.length], tolerance);
-          }
+          path.push(...overHolder.slice(1));
           overcutEndIndex = path.length - 1;
           overcutPoint = path[overcutEndIndex].slice();
-          const forward = path.slice(overcutStartIndex, overcutEndIndex + 1);
-          for (let i = forward.length - 2; i >= 0; i--) path.push(forward[i].slice());
         }
         return { ...contour, points: path, overcutPoint, overcutStartIndex, overcutEndIndex };
       }
@@ -1330,7 +1383,7 @@
         $('sendBtn').addEventListener('click', sendCommands);
         $('stopBtn').addEventListener('click', stopPlotter);
         $('previewBtn').addEventListener('click', showCommands);
-        ['sheetWidth', 'sheetHeight', 'scale', 'rotation', 'mirror', 'origin', 'fitToSheet', 'knifeOffset', 'overcut', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
+        ['sheetWidth', 'sheetHeight', 'scale', 'rotation', 'mirror', 'origin', 'fitToSheet', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
 
         // Панорамирование и zoom холста.
         const canvas = $('canvasWrap'), preview = $('preview');

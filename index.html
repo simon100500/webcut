@@ -21,17 +21,23 @@
     .brand h1 { margin: 0; font-size: 21px; letter-spacing: -.03em; } .brand p { margin: 1px 0 0; color: var(--muted); font-size: 12px; }
     .device-status { display: flex; align-items: center; gap: 10px; color: var(--muted); } .status-light { width: 9px; height: 9px; border-radius: 50%; background: #aab9c7; box-shadow: 0 0 0 4px #aab9c71c; } .status-light.ready { background: var(--green); box-shadow: 0 0 0 4px #1d9b681c; }
     .top-actions { display: flex; align-items: center; gap: 12px; }
-    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 20px; align-items: start; }
+    .workspace { display: grid; grid-template-columns: 268px minmax(0, 1fr) 350px; gap: 18px; align-items: start; }
+    .sidebar { min-width: 0; }
     .card { background: var(--panel); border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow); }
     .canvas-card { overflow: hidden; } .card-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 15px 18px; border-bottom: 1px solid var(--line); }
     .card-head h2 { margin: 0; font-size: 14px; letter-spacing: -.01em; } .subtle { color: var(--muted); font-size: 12px; }
-    .canvas-wrap { position: relative; min-height: 690px; display: grid; place-items: center; padding: 28px; background-color: #f7fafd; background-image: linear-gradient(#dbe5f0 1px, transparent 1px), linear-gradient(90deg, #dbe5f0 1px, transparent 1px); background-size: 28px 28px; }
+    .canvas-wrap { position: relative; min-height: 720px; display: grid; place-items: center; padding: 28px; background-color: #f7fafd; background-image: linear-gradient(#dbe5f0 1px, transparent 1px), linear-gradient(90deg, #dbe5f0 1px, transparent 1px); background-size: 28px 28px; }
     svg#preview { width: 100%; max-width: 980px; aspect-ratio: 1.35; overflow: visible; }
     .sheet { fill: #fff; stroke: #adbed0; stroke-width: 1.2; filter: drop-shadow(0 6px 8px rgba(65, 99, 132, .12)); } .cut { fill: none; stroke: var(--blue); stroke-width: 2.4; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; } .cut.original { stroke: #8ab2e4; stroke-dasharray: 5 5; stroke-width: 1.25; } .cut.overcut { stroke: var(--orange); stroke-width: 3; } .cut-point { fill: var(--green); stroke: white; stroke-width: 1.5; } .sheet-label { fill: #91a5ba; font-size: 12px; letter-spacing: .04em; }
     .empty-state { display: none; position: absolute; inset: 0; place-items: center; pointer-events: none; color: var(--muted); text-align: center; } .empty-state.visible { display: grid; }
     .drop-zone { padding: 21px; border: 1px dashed #9cb4ce; border-radius: 11px; background: #f5f9ff; text-align: center; transition: border .15s, background .15s; } .drop-zone.dragover { border-color: var(--blue); background: var(--blue-soft); } .drop-zone strong { display: block; margin-bottom: 4px; color: var(--text); } .drop-zone span { display: block; color: var(--muted); font-size: 12px; } .drop-zone input { display: none; } .drop-zone label { display: inline-flex; margin-top: 12px; color: var(--blue); font-weight: 700; cursor: pointer; }
     .canvas-foot { display: flex; justify-content: space-between; gap: 16px; padding: 11px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
-    .inspector { padding: 0 18px 18px; } .section { padding: 19px 0; border-bottom: 1px solid var(--line); } .section:last-child { border-bottom: 0; padding-bottom: 0; }
+    .inspector { padding: 0 18px 18px; } .sidebar .section { padding: 18px 0; border-bottom: 1px solid var(--line); } .sidebar .section:first-child { padding-top: 18px; } .sidebar .section:last-child { border-bottom: 0; padding-bottom: 0; }
+    .sidebar-left .section:first-child { padding-top: 16px; }
+    .sidebar-left .top-actions { display: block; padding: 16px 0 15px; border-bottom: 1px solid var(--line); }
+    .sidebar-left .top-actions .device-status { margin-bottom: 11px; }
+    .sidebar-left .top-actions .outline { width: 100%; }
+    .sidebar-right .section-title { color: var(--blue-dark); }
     .section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 14px; color: var(--text); font-size: 12px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; } .section-title small { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; }
     .field { margin-bottom: 12px; } .field:last-child { margin-bottom: 0; } .field label { display: block; margin: 0 0 6px; color: #62788f; font-size: 12px; font-weight: 600; }
     input[type="number"], select { width: 100%; height: 38px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; outline: none; background: #fff; color: var(--text); transition: border .15s, box-shadow .15s; } input[type="number"]:focus, select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #1769d01b; }
@@ -43,24 +49,45 @@
     .log { height: 142px; overflow: auto; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #f7f9fc; color: #61758c; font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; }
     .stats { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; } .stat { padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: #fbfdff; font-size: 11px; } .stat strong { color: var(--text); }
     .warning { padding: 10px 11px; border: 1px solid #f3d8aa; border-radius: 8px; color: #93601a; background: #fff9ed; font-size: 11px; }
-    @media (max-width: 1000px) { .workspace { grid-template-columns: 1fr; } .inspector { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 22px; } .section:last-child { grid-column: 1 / -1; } }
-    @media (max-width: 680px) { .app { padding: 17px 13px 28px; } .topbar { display: block; } .top-actions { margin-top: 15px; justify-content: space-between; } .canvas-wrap { min-height: 420px; padding: 14px; } .inspector { display: block; } .canvas-foot { display: block; } .canvas-foot span + span { display: block; margin-top: 5px; } }
+    /* Figma-like workspace shell: fixed tool columns, uninterrupted center canvas. */
+    html, body { height: 100%; overflow: hidden; }
+    .app { width: 100%; max-width: none; height: 100vh; margin: 0; padding: 0; }
+    .topbar { height: 58px; margin: 0; padding: 0 20px; border-bottom: 1px solid var(--line); background: #fff; }
+    .brand-mark { width: 32px; height: 32px; border-radius: 8px; }
+    .workspace { height: calc(100vh - 58px); grid-template-columns: 278px minmax(0, 1fr) 350px; gap: 0; align-items: stretch; }
+    .sidebar { height: 100%; overflow-y: auto; border: 0; border-right: 1px solid var(--line); border-radius: 0; box-shadow: none; background: #fff; }
+    .sidebar-right { border-right: 0; border-left: 1px solid var(--line); }
+    .canvas-card { height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+    .card-head { min-height: 58px; padding: 12px 18px; background: #fff; }
+    .canvas-wrap { height: calc(100% - 103px); min-height: 0; padding: 0; overflow: hidden; touch-action: none; cursor: grab; }
+    .canvas-wrap.is-panning { cursor: grabbing; }
+    svg#preview { width: 100%; max-width: 100%; height: 100%; max-height: 100%; aspect-ratio: auto; transform-origin: 0 0; will-change: transform; }
+    .canvas-foot { min-height: 45px; background: #fff; }
+    .sidebar-left .top-actions { padding: 16px 18px; }
+    .sidebar .section { padding-left: 18px; padding-right: 18px; }
+    @media (max-width: 980px) { html, body { overflow: auto; } .app { height: auto; } .topbar { height: 58px; } .workspace { height: auto; grid-template-columns: 1fr 1fr; } .canvas-card { grid-column: 1 / -1; grid-row: 1; height: 620px; } .sidebar { height: auto; max-height: none; } .sidebar-left { grid-column: 1; grid-row: 2; } .sidebar-right { grid-column: 2; grid-row: 2; } .canvas-wrap { height: calc(100% - 103px); } }
+    @media (max-width: 1180px) { .workspace { grid-template-columns: 240px minmax(0, 1fr) 310px; gap: 14px; } .app { padding-left: 18px; padding-right: 18px; } }
+    @media (max-width: 980px) { .workspace { grid-template-columns: 1fr 1fr; } .canvas-card { grid-column: 1 / -1; grid-row: 1; } .sidebar-left { grid-column: 1; grid-row: 2; } .sidebar-right { grid-column: 2; grid-row: 2; } .canvas-wrap { min-height: 560px; } }
+    @media (max-width: 680px) { .app { padding: 17px 13px 28px; } .topbar { display: block; } .topbar .top-actions { display: none; } .workspace { display: flex; flex-direction: column; } .canvas-card { order: 1; width: 100%; } .sidebar-left { order: 2; width: 100%; } .sidebar-right { order: 3; width: 100%; } .canvas-wrap { min-height: 420px; padding: 14px; } .canvas-foot { display: block; } .canvas-foot span + span { display: block; margin-top: 5px; } }
   </style>
 </head>
 <body>
   <main class="app">
-    <header class="topbar"><div class="brand"><div class="brand-mark">CL</div><div><h1>Cutline</h1><p>Рабочее место для точной резки</p></div></div><div class="top-actions"><div class="device-status"><span id="statusLight" class="status-light"></span><span id="statusText">Плоттер не подключён</span></div><button id="connectBtn" class="outline">Подключить COM</button></div></header>
+    <header class="topbar"><div class="brand"><div class="brand-mark">CL</div><div><h1>Cutline</h1><p>Рабочее место для точной резки</p></div></div></header>
     <div class="workspace">
+      <aside class="card sidebar sidebar-left">
+        <div class="top-actions"><div class="device-status"><span id="statusLight" class="status-light"></span><span id="statusText">Плоттер не подключён</span></div><button id="connectBtn" class="outline">Подключить COM</button></div>
+        <section class="section"><h2 class="section-title">01 / Контур <small>SVG</small></h2><div id="dropZone" class="drop-zone"><strong>Перетащите SVG сюда</strong><span>или выберите файл с компьютера</span><label for="fileInput">Выбрать файл</label><input id="fileInput" type="file" accept=".svg,image/svg+xml" /></div><div id="fileName" class="file-name">Тестовый контур</div><div id="stats" class="stats"><span class="stat"><strong id="pathCount">1</strong> контур</span><span class="stat"><strong id="segmentCount">4</strong> сегмента</span><span class="stat"><strong id="designSize">80 × 50</strong> мм</span></div></section>
+        <section class="section"><h2 class="section-title">02 / Лист <small>размещение</small></h2><div class="grid2"><div class="field"><label for="sheetWidth">Ширина, мм</label><input id="sheetWidth" type="number" value="210" min="10" max="2000" step="1" /></div><div class="field"><label for="sheetHeight">Высота, мм</label><input id="sheetHeight" type="number" value="297" min="10" max="2000" step="1" /></div></div><div class="grid2"><div class="field"><label for="scale">Масштаб</label><input id="scale" type="number" value="1" min="0.01" max="100" step="0.01" /></div><div class="field"><label for="rotation">Поворот</label><select id="rotation"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></div></div><div class="field"><label for="origin">Начало координат</label><select id="origin"><option value="top-left">Левый верхний угол</option><option value="bottom-left">Левый нижний угол</option><option value="center">Центр листа</option></select></div><label class="check-row"><input id="fitToSheet" type="checkbox" checked /><span>Вписать в область<em>Для абсолютного нуля листа</em></span></label></section>
+      </aside>
       <section class="card canvas-card">
         <div class="card-head"><div><h2>Предпросмотр макета</h2><span id="previewMeta" class="subtle">Тестовый контур готов</span></div><span id="unitMeta" class="subtle">мм</span></div>
         <div id="canvasWrap" class="canvas-wrap"><svg id="preview" viewBox="0 0 1000 700" role="img" aria-label="Предпросмотр резки SVG"><rect class="sheet" x="62" y="45" width="876" height="610" rx="2" /><g id="previewOriginal"></g><g id="previewCut"></g><g id="previewMarkers"></g><text id="sheetLabel" class="sheet-label" x="500" y="680" text-anchor="middle"></text></svg><div id="emptyState" class="empty-state"><div><strong>Загрузите SVG, чтобы увидеть контур</strong><br><span>Поддерживаются path, rect, circle, ellipse, line, polyline и polygon</span></div></div></div>
         <div class="canvas-foot"><span id="fileCaption">Встроенный тестовый квадрат · можно сразу проверить команды</span><span id="coordinateCaption">Начало координат: левый верхний угол листа</span></div>
       </section>
-      <aside class="card inspector">
-        <section class="section"><h2 class="section-title">01 / Контур <small>SVG</small></h2><div id="dropZone" class="drop-zone"><strong>Перетащите SVG сюда</strong><span>или выберите файл с компьютера</span><label for="fileInput">Выбрать SVG</label><input id="fileInput" type="file" accept=".svg,image/svg+xml" /></div><div id="fileName" class="file-name">Тестовый контур</div><div id="stats" class="stats"><span class="stat"><strong id="pathCount">1</strong> контур</span><span class="stat"><strong id="segmentCount">4</strong> сегмента</span><span class="stat"><strong id="designSize">80 × 50</strong> мм</span></div></section>
-        <section class="section"><h2 class="section-title">02 / Лист и размещение <small>точность</small></h2><div class="grid2"><div class="field"><label for="sheetWidth">Ширина листа, мм</label><input id="sheetWidth" type="number" value="210" min="10" max="2000" step="1" /></div><div class="field"><label for="sheetHeight">Высота листа, мм</label><input id="sheetHeight" type="number" value="297" min="10" max="2000" step="1" /></div></div><div class="grid2"><div class="field"><label for="scale">Масштаб</label><input id="scale" type="number" value="1" min="0.01" max="100" step="0.01" /></div><div class="field"><label for="rotation">Поворот</label><select id="rotation"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></div></div><div class="field"><label for="origin">Начало координат</label><select id="origin"><option value="top-left">Левый верхний угол</option><option value="bottom-left">Левый нижний угол</option><option value="center">Центр листа</option></select></div><label class="check-row"><input id="fitToSheet" type="checkbox" checked /><span>Вписать в рабочую область<em>Сохраняет пропорции и оставляет поле 10 мм</em></span></label></section>
-        <section class="section"><h2 class="section-title">03 / Нож и траектория <small>компенсация</small></h2><div class="grid2"><div class="field"><label for="knifeOffset">Компенсация ножа, мм</label><input id="knifeOffset" type="number" value="0" min="0" max="5" step="0.01" /></div><div class="field"><label for="bladeExtension">Вылет ножа, мм</label><input id="bladeExtension" type="number" value="0.5" min="0" max="5" step="0.1" /></div></div><div class="grid2"><div class="field"><label for="overcut">Overcut, мм</label><input id="overcut" type="number" value="0.3" min="0" max="10" step="0.1" /></div><div class="field"><label for="tolerance">Допуск, мм</label><input id="tolerance" type="number" value="0.15" min="0.02" max="2" step="0.01" /></div></div><label class="check-row"><input id="showStart" type="checkbox" checked /><span>Показывать точки старта<em>Зелёная точка — начало прохода, оранжевый — overcut</em></span></label><p class="hint">Вылет ножа выставляется механически на каретке. Поле сохраняет его в профиле и помогает не забыть настройку; векторная компенсация задаётся отдельно.</p></section>
-        <section class="section"><h2 class="section-title">04 / Протокол и резка <small>COM</small></h2><div class="grid2"><div class="field"><label for="protocol">Язык команд</label><select id="protocol"><option value="HPGL">HPGL</option><option value="DMPL">DMPL</option></select></div><div class="field"><label for="resolution">Шаг координат</label><select id="resolution"><option value="40">0,025 мм</option><option value="100">0,010 мм</option><option value="20">0,050 мм</option></select></div></div><div class="grid3"><div class="field"><label for="baud">Baud</label><select id="baud"><option>9600</option><option>19200</option><option>38400</option><option>115200</option></select></div><div class="field"><label for="speed">Скорость</label><input id="speed" type="number" value="120" min="1" max="600" step="1" /></div><div class="field"><label for="force">Усилие</label><input id="force" type="number" value="12" min="1" max="100" step="1" /></div></div><div class="warning">Перед первым проходом поднимите нож или установите перо. Сделайте пробную резку на обрезке материала.</div><div class="button-row" style="margin-top: 12px"><button id="previewBtn" class="secondary">Показать команды</button><button id="stopBtn" class="stop">Стоп</button></div><button id="sendBtn" class="primary">Отправить траекторию</button></section>
+      <aside class="card inspector sidebar sidebar-right">
+        <section class="section"><h2 class="section-title">03 / Текущий рез <small>нож и траектория</small></h2><div class="grid2"><div class="field"><label for="knifeOffset">Компенсация вылета, мм</label><input id="knifeOffset" type="number" value="0" min="0" max="5" step="0.01" /></div><div class="field"><label for="bladeExtension">Вылет ножа, мм</label><input id="bladeExtension" type="number" value="0.5" min="0" max="5" step="0.1" /></div></div><div class="grid2"><div class="field"><label for="overcut">Overcut, мм</label><input id="overcut" type="number" value="0.3" min="0" max="10" step="0.1" /></div><div class="field"><label for="tolerance">Допуск, мм</label><input id="tolerance" type="number" value="0.15" min="0.02" max="2" step="0.01" /></div></div><label class="check-row"><input id="showStart" type="checkbox" checked /><span>Показывать точки старта<em>Зелёная — начало, оранжевая — overcut</em></span></label><p class="hint">Вылет выставляется механически на каретке. Компенсация меняет саму траекторию ножа.</p></section>
+        <section class="section"><h2 class="section-title">04 / Параметры реза <small>HPGL · COM</small></h2><select id="protocol" hidden><option value="HPGL" selected>HPGL</option></select><div class="grid2"><div class="field"><label for="resolution">Шаг координат</label><select id="resolution"><option value="40">0,025 мм</option><option value="100">0,010 мм</option><option value="20">0,050 мм</option></select></div><div class="field"><label for="baud">Baud</label><select id="baud"><option>9600</option><option>19200</option><option>38400</option><option>115200</option></select></div></div><div class="grid2"><div class="field"><label for="speed">Скорость</label><input id="speed" type="number" value="120" min="1" max="600" step="1" /></div><div class="field"><label for="force">Усилие</label><input id="force" type="number" value="12" min="1" max="100" step="1" /></div></div><div class="warning">Перед первым проходом проверьте нож на обрезке материала.</div><div class="button-row" style="margin-top: 12px"><button id="previewBtn" class="secondary">Показать команды</button><button id="stopBtn" class="stop">Стоп</button></div><button id="sendBtn" class="primary">Отправить траекторию</button></section>
         <section class="section"><h2 class="section-title">Журнал <small>состояние</small></h2><div id="log" class="log">Готово. Импортируйте SVG или проверьте встроенный квадрат.</div></section>
       </aside>
     </div>
@@ -389,6 +416,114 @@
       return command.endsWith('SP0;') ? command : `${command}\nSP0;`;
     };
     renderPreview();
+  </script>
+  <script>
+    // Финальная конфигурация интерфейса: только проверенный новый HPGL-поток.
+    // Ранее добавленные диагностические варианты не должны попадать в рабочую UI.
+    const protocolOnlyHpgl = $('protocol');
+    protocolOnlyHpgl.replaceChildren(new Option('HPGL', 'HPGL'));
+    protocolOnlyHpgl.value = 'HPGL';
+    protocolOnlyHpgl.closest('.field').querySelector('label').textContent = 'Язык команд · HPGL';
+    if (typeof hpglDialectField !== 'undefined' && hpglDialectField.isConnected) hpglDialectField.remove();
+    $('knifeOffset').closest('.field').querySelector('label').textContent = 'Компенсация вылета ножа, мм';
+
+    // Реальная геометрическая компенсация выполняется в transformedContours()
+    // через offsetContour(); вылет ножа остаётся механической настройкой и
+    // не подменяет боковую компенсацию траектории.
+    hpgl = function(commandsContours) {
+      const speed = Math.round(num('speed', 120) / 10);
+      const force = Math.round(num('force', 12));
+      const relative = $('origin').value === 'current';
+      const lines = ['IN;', `VS${speed};`, `FS${force};`, 'SP1;'];
+      if (relative) {
+        const deviceContours = commandsContours.map(contour => contour.points.map(toDevicePoint));
+        const first = deviceContours.find(points => points.length)?.[0] || [0, 0];
+        let cursor = [0, 0];
+        lines.push('PR;');
+        deviceContours.forEach(points => {
+          if (!points.length) return;
+          const local = points.map(point => [point[0] - first[0], point[1] - first[1]]);
+          const startDelta = [local[0][0] - cursor[0], local[0][1] - cursor[1]];
+          if (startDelta[0] || startDelta[1]) lines.push(`PU${startDelta[0]},${startDelta[1]};`);
+          const deltas = local.slice(1).map((point, index) => [point[0] - local[index][0], point[1] - local[index][1]]);
+          if (deltas.length) lines.push(`PD${deltas.map(point => point.join(',')).join(',')};`);
+          const last = local[local.length - 1];
+          lines.push(`PU${last[0] + 1},${last[1]};`);
+          cursor = [last[0] + 1, last[1]];
+        });
+      } else {
+        lines.push('PA;');
+        commandsContours.forEach(contour => {
+          const points = contour.points.map(toDevicePoint);
+          if (!points.length) return;
+          lines.push(`PU${points[0][0]},${points[0][1]};`);
+          if (points.length > 1) lines.push(`PD${points.slice(1).map(point => point.join(',')).join(',')};`);
+          const last = points[points.length - 1];
+          lines.push(`PU${last[0] + 1},${last[1]};`);
+        });
+      }
+      lines.push('PA;', 'SP0;');
+      return lines.join('\n');
+    };
+    renderPreview();
+  </script>
+  <script>
+    // Надёжный финальный обработчик отправки. Кнопка несколько раз заменялась
+    // старой диагностикой, поэтому привязываем listener к фактическому узлу UI.
+    (() => {
+      const currentSendButton = $('sendBtn');
+      const reliableSendButton = currentSendButton.cloneNode(true);
+      currentSendButton.replaceWith(reliableSendButton);
+      reliableSendButton.dataset.bound = '1';
+      let sending = false;
+      reliableSendButton.onclick = async () => {
+        if (sending) { log('Дождитесь завершения текущей отправки.'); return; }
+        showCommands();
+        if (!state.writer) { log('Траектория не отправлена: сначала подключите COM-порт.'); return; }
+        sending = true;
+        reliableSendButton.disabled = true;
+        reliableSendButton.textContent = 'Отправка…';
+        try {
+          const payload = `${state.commandText}\r\n`;
+          await state.writer.write(new TextEncoder().encode(payload));
+          log(`HPGL отправлен: ${state.commandText.split('\n').length} строк.`);
+        } catch (error) {
+          log(`Ошибка отправки: ${error.message}`);
+        } finally {
+          sending = false;
+          reliableSendButton.disabled = false;
+          reliableSendButton.textContent = 'Отправить траекторию';
+        }
+      };
+    })();
+  </script>
+  <script>
+    // Навигация холста в стиле Figma: drag для панорамирования, wheel для zoom.
+    (() => {
+      const canvas = $('canvasWrap'), preview = $('preview');
+      const viewport = { x: 0, y: 0, scale: 1, pointerId: null, startX: 0, startY: 0, originX: 0, originY: 0 };
+      const applyViewport = () => { preview.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`; };
+      canvas.addEventListener('pointerdown', event => {
+        if (event.button !== 0 && event.button !== 1) return;
+        viewport.pointerId = event.pointerId; viewport.startX = event.clientX; viewport.startY = event.clientY; viewport.originX = viewport.x; viewport.originY = viewport.y;
+        canvas.setPointerCapture(event.pointerId); canvas.classList.add('is-panning');
+      });
+      canvas.addEventListener('pointermove', event => {
+        if (viewport.pointerId !== event.pointerId) return;
+        viewport.x = viewport.originX + event.clientX - viewport.startX;
+        viewport.y = viewport.originY + event.clientY - viewport.startY;
+        applyViewport();
+      });
+      const stopPan = event => { if (viewport.pointerId !== event.pointerId) return; viewport.pointerId = null; canvas.classList.remove('is-panning'); canvas.releasePointerCapture?.(event.pointerId); };
+      canvas.addEventListener('pointerup', stopPan); canvas.addEventListener('pointercancel', stopPan);
+      canvas.addEventListener('wheel', event => {
+        event.preventDefault();
+        const rect = canvas.getBoundingClientRect(), px = event.clientX - rect.left, py = event.clientY - rect.top;
+        const nextScale = clamp(viewport.scale * Math.pow(1.0015, -event.deltaY), .35, 5), ratio = nextScale / viewport.scale;
+        viewport.x = px - (px - viewport.x) * ratio; viewport.y = py - (py - viewport.y) * ratio; viewport.scale = nextScale; applyViewport();
+      }, { passive: false });
+      applyViewport();
+    })();
   </script>
 </body>
 </html>

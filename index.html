@@ -807,6 +807,16 @@
                 <option value="270">270°</option>
               </select></div>
           </div>
+          <div class="field"><label for="orientation">Ориентация на листе</label><select id="orientation">
+              <option value="0">0° — как в макете</option>
+              <option value="90">90°</option>
+              <option value="180">180°</option>
+              <option value="270">270°</option>
+              <option value="0m">0° · зеркало</option>
+              <option value="90m" selected>90° · зеркало — старт справа снизу</option>
+              <option value="180m">180° · зеркало</option>
+              <option value="270m">270° · зеркало</option>
+            </select></div>
           <div class="field"><label for="origin">Начало координат</label><select id="origin">
               <option value="current" selected>Текущая точка плоттера</option>
               <option value="top-left">Левый верхний угол</option>
@@ -906,13 +916,15 @@
       const KNIFE_TURN_MIN_RAD = KNIFE_TURN_MIN_DEG * Math.PI / 180;
 
       // ============================================================
-      // Состояние. Встроенный тестовый прямоугольник (старт от текущей точки каретки).
+      // Состояние. Встроенный тест — буква «R»: прямой хвост, дуга-чаша
+      // и диагональная лапка. Проверяет прямые, дуги и подконтуры.
       // ============================================================
+      const TEST_R_PATH = 'M 0 0 L 0 30 M 0 0 L 10 0 A 8 8 0 0 1 10 16 L 0 16 M 9 16 L 20 30';
       const state = {
-        contours: [{ points: [[0, 0], [20, 0], [20, 30], [0, 30]], closed: true }],
+        contours: [],
         designWidth: 20,
         designHeight: 30,
-        fileName: 'Тестовый прямоугольник 20 × 30 мм',
+        fileName: 'Тест: буква R 20 × 30 мм',
         port: null,
         writer: null,
         commandText: '',
@@ -989,6 +1001,47 @@
       }
 
       // ============================================================
+      // Ориентация в системе координат станка и привязка контура
+      // к правому нижнему углу листа. Применяется ОДНА И ТА ЖЕ
+      // для превью и для команд реза: что на экране — то и режем.
+      // ============================================================
+      function parseOrientation() {
+        const presets = {
+          '0':    { swap: false, flipX: false, flipY: false },
+          '90':   { swap: true,  flipX: false, flipY: true  },
+          '180':  { swap: false, flipX: true,  flipY: true  },
+          '270':  { swap: true,  flipX: true,  flipY: false },
+          '0m':   { swap: false, flipX: true,  flipY: false },
+          '90m':  { swap: true,  flipX: true,  flipY: true  },
+          '180m': { swap: false, flipX: false, flipY: true  },
+          '270m': { swap: true,  flipX: false, flipY: false }
+        };
+        return presets[$('orientation').value] || presets['0'];
+      }
+
+      // referenceContours — контуры без компенсации ножа: по ним считается
+      // габарит, чтобы превью макета и траектория реза легли одинаково.
+      function machinePlace(contours, referenceContours) {
+        const s = currentSettings();
+        const o = parseOrientation();
+        const ref = referenceContours || contours;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const c of ref) for (const [x, y] of c.points) {
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+        const W = Math.max(maxX - minX, 1e-6), H = Math.max(maxY - minY, 1e-6);
+        const outW = o.swap ? H : W, outH = o.swap ? W : H;
+        return contours.map(c => ({ ...c, points: c.points.map(([x, y]) => {
+          let u = (x - minX) / W, v = (y - minY) / H;
+          if (o.swap) { const t = u; u = v; v = t; }
+          if (o.flipX) u = 1 - u;
+          if (o.flipY) v = 1 - v;
+          return [s.sheetW - outW + u * outW, s.sheetH - outH + v * outH];
+        })}));
+      }
+
+      // ============================================================
       // Дуга поворота ножа в вершине. На почти прямых участках дуга не нужна:
       // нож плавно поворачивается сам, а лишние дуги создают точки и рывки.
       // ============================================================
@@ -1045,13 +1098,11 @@
       }
 
       // ============================================================
-      // Пересчёт мм в координаты устройства с учётом начала координат.
+      // Пересчёт мм в шаги устройства. Ориентация и привязка к углу
+      // листа уже выполнены в machinePlace — здесь только масштаб.
       // ============================================================
       function toDevicePoint(point, s) {
-        let x = point[0], y = point[1];
-        if (s.origin === 'bottom-left') y = s.sheetH - y;
-        else if (s.origin === 'center') { x -= s.sheetW / 2; y = s.sheetH / 2 - y; }
-        return [Math.round(x * s.resolution), Math.round(y * s.resolution)];
+        return [Math.round(point[0] * s.resolution), Math.round(point[1] * s.resolution)];
       }
 
       // Убираем повторные точки на сетке устройства: это нулевые ходы,
@@ -1103,7 +1154,10 @@
       // ============================================================
       // Генерация команд и их просмотр в журнале.
       // ============================================================
-      function pointsForCommands() { return transformedContours().map(withOvercut); }
+      function pointsForCommands() {
+        const placed = transformedContours();
+        return machinePlace(placed.map(withOvercut), placed);
+      }
       function createCommands() { return hpgl(pointsForCommands()); }
       function showCommands() {
         state.commandText = createCommands();
@@ -1124,6 +1178,10 @@
         const s = currentSettings();
         const transformed = transformedContours();
         const previewContours = transformed.map(withOvercut);
+        // Превью и рез используют одно и то же преобразование machinePlace:
+        // картинка на листе — ровно то, что уйдёт в команды.
+        const placedOriginal = machinePlace(transformed, transformed);
+        const placedCut = machinePlace(previewContours, transformed);
         const previewScale = Math.min(876 / Math.max(s.sheetW, .001), 610 / Math.max(s.sheetH, .001));
         const previewW = s.sheetW * previewScale, previewH = s.sheetH * previewScale;
         const previewX = (1000 - previewW) / 2, previewY = (700 - previewH) / 2;
@@ -1134,11 +1192,11 @@
         $('previewOriginal').replaceChildren();
         $('previewCut').replaceChildren();
         $('previewMarkers').replaceChildren();
-        transformed.forEach(mapped => {
+        placedOriginal.forEach(mapped => {
           const pts = mapped.points.concat(mapped.closed ? [mapped.points[0]] : []).map(map);
           drawPolyline($('previewOriginal'), pts, 'cut original');
         });
-        previewContours.forEach(contour => {
+        placedCut.forEach(contour => {
           drawPolyline($('previewCut'), contour.points.map(map), 'cut');
           if (contour.overcutStartIndex >= 0) drawPolyline($('previewCut'), contour.points.slice(contour.overcutStartIndex).map(map), 'cut overcut');
           if (s.showStart) {
@@ -1152,8 +1210,8 @@
         $('sheetLabel').setAttribute('y', Math.min(688, previewY + previewH + 25));
         $('sheetLabel').textContent = `${fmt(s.sheetW)} × ${fmt(s.sheetH)} мм · ${previewContours.length} контур(а)`;
         $('previewMeta').textContent = `${previewContours.length} контур(а) · компенсация ${fmt(s.knifeOffset)} мм · overcut ${fmt(s.overcut)} мм`;
-        const originText = $('origin').selectedOptions[0].textContent.toLowerCase();
-        $('coordinateCaption').textContent = `Начало координат: ${originText}`;
+        const orientationText = $('orientation').selectedOptions[0].textContent.trim();
+        $('coordinateCaption').textContent = `Ориентация: ${orientationText} · размещение: правый нижний угол листа`;
         const allSegments = state.contours.reduce((sum, c) => sum + Math.max(0, c.points.length - 1) + (c.closed ? 1 : 0), 0);
         $('pathCount').textContent = state.contours.length;
         $('segmentCount').textContent = allSegments;
@@ -1247,8 +1305,10 @@
       // Привязка событий и старт
       // ============================================================
       function init() {
+        // Встроенный тестовый контур разбирается тем же парсером, что и импорт SVG.
+        state.contours = parsePathList(TEST_R_PATH, Math.max(.02, num('tolerance', .15)));
         $('fileName').textContent = state.fileName;
-        $('fileCaption').textContent = 'Встроенный прямоугольник 20 × 30 мм · старт от текущей точки каретки';
+        $('fileCaption').textContent = 'Встроенный тест «буква R» 20 × 30 мм · старт от текущей точки каретки';
         $('fileInput').addEventListener('change', event => importSvg(event.target.files[0]));
         $('dropZone').addEventListener('dragover', event => { event.preventDefault(); $('dropZone').classList.add('dragover'); });
         $('dropZone').addEventListener('dragleave', () => $('dropZone').classList.remove('dragover'));
@@ -1257,7 +1317,7 @@
         $('sendBtn').addEventListener('click', sendCommands);
         $('stopBtn').addEventListener('click', stopPlotter);
         $('previewBtn').addEventListener('click', showCommands);
-        ['sheetWidth', 'sheetHeight', 'scale', 'rotation', 'origin', 'fitToSheet', 'knifeOffset', 'overcut', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
+        ['sheetWidth', 'sheetHeight', 'scale', 'rotation', 'orientation', 'origin', 'fitToSheet', 'knifeOffset', 'overcut', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
 
         // Панорамирование и zoom холста.
         const canvas = $('canvasWrap'), preview = $('preview');

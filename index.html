@@ -802,21 +802,13 @@
                 max="100" step="0.01" /></div>
             <div class="field"><label for="rotation">Поворот</label><select id="rotation">
                 <option value="0">0°</option>
-                <option value="90">90°</option>
+                <option value="90" selected>90°</option>
                 <option value="180">180°</option>
                 <option value="270">270°</option>
               </select></div>
           </div>
-          <div class="field"><label for="orientation">Ориентация на листе</label><select id="orientation">
-              <option value="0">0° — как в макете</option>
-              <option value="90">90°</option>
-              <option value="180">180°</option>
-              <option value="270">270°</option>
-              <option value="0m">0° · зеркало</option>
-              <option value="90m" selected>90° · зеркало — старт справа снизу</option>
-              <option value="180m">180° · зеркало</option>
-              <option value="270m">270° · зеркало</option>
-            </select></div>
+          <label class="check-row"><input id="mirror" type="checkbox" checked /><span>Зеркало<em>Отражение по
+                горизонтали</em></span></label>
           <div class="field"><label for="origin">Начало координат</label><select id="origin">
               <option value="current" selected>Текущая точка плоттера</option>
               <option value="top-left">Левый верхний угол</option>
@@ -980,43 +972,31 @@
       function transformedContours() {
         const s = currentSettings();
         const rawW = state.designWidth * s.scale, rawH = state.designHeight * s.scale;
-        const rotatedW = s.rotation % 180 ? rawH : rawW;
-        const rotatedH = s.rotation % 180 ? rawW : rawH;
-        const fit = s.fit ? Math.min((s.sheetW - 20) / Math.max(rotatedW, .001), (s.sheetH - 20) / Math.max(rotatedH, .001), 1) : 1;
-        const placedW = rotatedW * fit, placedH = rotatedH * fit;
+        const fit = s.fit ? Math.min((s.sheetW - 20) / Math.max(rawW, .001), (s.sheetH - 20) / Math.max(rawH, .001), 1) : 1;
+        const placedW = rawW * fit, placedH = rawH * fit;
         const left = s.current ? 0 : (s.sheetW - placedW) / 2;
         const top = s.current ? 0 : (s.sheetH - placedH) / 2;
-        return state.contours.map(contour => {
-          const points = normalizeContour(contour).points.map(p => [p[0] * s.scale, p[1] * s.scale]);
-          const mapped = points.map(p => {
-            const x = p[0] * fit, y = p[1] * fit;
-            let rx = x, ry = y;
-            if (s.rotation === 90) { rx = rawH * fit - y; ry = x; }
-            else if (s.rotation === 180) { rx = rawW * fit - x; ry = rawH * fit - y; }
-            else if (s.rotation === 270) { rx = y; ry = rawW * fit - x; }
-            return [left + rx, top + ry];
-          });
-          return { ...contour, points: mapped };
-        });
+        return state.contours.map(contour => ({
+          ...contour,
+          points: normalizeContour(contour).points.map(p => [p[0] * s.scale * fit + left, p[1] * s.scale * fit + top])
+        }));
       }
 
       // ============================================================
       // Ориентация в системе координат станка и привязка контура
-      // к правому нижнему углу листа. Применяется ОДНА И ТА ЖЕ
-      // для превью и для команд реза: что на экране — то и режем.
+      // к правому нижнему углу листа. Команды реза используют именно
+      // её: что уходит в плоттер — то и режется.
       // ============================================================
       function parseOrientation() {
-        const presets = {
-          '0':    { swap: false, flipX: false, flipY: false },
-          '90':   { swap: true,  flipX: false, flipY: true  },
-          '180':  { swap: false, flipX: true,  flipY: true  },
-          '270':  { swap: true,  flipX: true,  flipY: false },
-          '0m':   { swap: false, flipX: true,  flipY: false },
-          '90m':  { swap: true,  flipX: true,  flipY: true  },
-          '180m': { swap: false, flipX: false, flipY: true  },
-          '270m': { swap: true,  flipX: false, flipY: false }
-        };
-        return presets[$('orientation').value] || presets['0'];
+        const rot = Number($('rotation').value);
+        const mirror = $('mirror').checked;
+        const base = {
+          0:    { swap: false, flipX: false, flipY: false },
+          90:   { swap: true,  flipX: false, flipY: true  },
+          180:  { swap: false, flipX: true,  flipY: true  },
+          270:  { swap: true,  flipX: true,  flipY: false }
+        }[rot] || { swap: false, flipX: false, flipY: false };
+        return { swap: base.swap, flipX: mirror ? !base.flipX : base.flipX, flipY: base.flipY };
       }
 
       // referenceContours — контуры без компенсации ножа: по ним считается
@@ -1039,6 +1019,32 @@
           if (o.flipY) v = 1 - v;
           return [s.sheetW - outW + u * outW, s.sheetH - outH + v * outH];
         })}));
+      }
+
+      // ============================================================
+      // Отображение макета на холсте. Команды уходят в плоттер в ориентации
+      // станка (право-низ + поворот/зеркало), но на экране удобно видеть сам
+      // макет «читабельно». Поэтому к уже размещённым в ориентации станка
+      // контурам применяем обратное преобразование (снимаем поворот и
+      // зеркало) и снова прижимаем к правому нижнему углу. На рез не влияет.
+      // ============================================================
+      function previewUnorient(points, ref, s, o) {
+        const { swap, flipX, flipY } = o;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const [x, y] of ref) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+        const W = Math.max(maxX - minX, 1e-6), H = Math.max(maxY - minY, 1e-6);
+        const Wd = swap ? H : W, Hd = swap ? W : H;
+        const undo = (u, v) => {
+          // Обратный порядок операций прямой ориентации (flipX/flipY/swap).
+          if (flipY) v = 1 - v;
+          if (flipX) u = 1 - u;
+          if (swap) { const t = u; u = v; v = t; }
+          return [u, v];
+        };
+        return points.map(([x, y]) => {
+          const [u, v] = undo((x - minX) / W, (y - minY) / H);
+          return [s.sheetW - Wd + u * Wd, s.sheetH - Hd + v * Hd];
+        });
       }
 
       // ============================================================
@@ -1182,6 +1188,12 @@
         // картинка на листе — ровно то, что уйдёт в команды.
         const placedOriginal = machinePlace(transformed, transformed);
         const placedCut = machinePlace(previewContours, transformed);
+        // На холсте показываем макет читабельно: снимаем машинные поворот и
+        // зеркало (только отображение), команды реза при этом не меняются.
+        const o = parseOrientation();
+        const displayRef = placedOriginal.flatMap(c => c.points);
+        const originalDisplay = placedOriginal.map(c => ({ ...c, points: previewUnorient(c.points, displayRef, s, o) }));
+        const cutDisplay = placedCut.map(c => ({ ...c, points: previewUnorient(c.points, displayRef, s, o) }));
         const previewScale = Math.min(876 / Math.max(s.sheetW, .001), 610 / Math.max(s.sheetH, .001));
         const previewW = s.sheetW * previewScale, previewH = s.sheetH * previewScale;
         const previewX = (1000 - previewW) / 2, previewY = (700 - previewH) / 2;
@@ -1192,11 +1204,11 @@
         $('previewOriginal').replaceChildren();
         $('previewCut').replaceChildren();
         $('previewMarkers').replaceChildren();
-        placedOriginal.forEach(mapped => {
+        originalDisplay.forEach(mapped => {
           const pts = mapped.points.concat(mapped.closed ? [mapped.points[0]] : []).map(map);
           drawPolyline($('previewOriginal'), pts, 'cut original');
         });
-        placedCut.forEach(contour => {
+        cutDisplay.forEach(contour => {
           drawPolyline($('previewCut'), contour.points.map(map), 'cut');
           if (contour.overcutStartIndex >= 0) drawPolyline($('previewCut'), contour.points.slice(contour.overcutStartIndex).map(map), 'cut overcut');
           if (s.showStart) {
@@ -1210,8 +1222,9 @@
         $('sheetLabel').setAttribute('y', Math.min(688, previewY + previewH + 25));
         $('sheetLabel').textContent = `${fmt(s.sheetW)} × ${fmt(s.sheetH)} мм · ${previewContours.length} контур(а)`;
         $('previewMeta').textContent = `${previewContours.length} контур(а) · компенсация ${fmt(s.knifeOffset)} мм · overcut ${fmt(s.overcut)} мм`;
-        const orientationText = $('orientation').selectedOptions[0].textContent.trim();
-        $('coordinateCaption').textContent = `Ориентация: ${orientationText} · размещение: правый нижний угол листа`;
+        const degree = $('rotation').value;
+        const mirrorTxt = $('mirror').checked ? ' · зеркало' : '';
+        $('coordinateCaption').textContent = `Рез: ${degree}°${mirrorTxt} · старт справа снизу · предпросмотр макета`;
         const allSegments = state.contours.reduce((sum, c) => sum + Math.max(0, c.points.length - 1) + (c.closed ? 1 : 0), 0);
         $('pathCount').textContent = state.contours.length;
         $('segmentCount').textContent = allSegments;
@@ -1317,7 +1330,7 @@
         $('sendBtn').addEventListener('click', sendCommands);
         $('stopBtn').addEventListener('click', stopPlotter);
         $('previewBtn').addEventListener('click', showCommands);
-        ['sheetWidth', 'sheetHeight', 'scale', 'rotation', 'orientation', 'origin', 'fitToSheet', 'knifeOffset', 'overcut', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
+        ['sheetWidth', 'sheetHeight', 'scale', 'rotation', 'mirror', 'origin', 'fitToSheet', 'knifeOffset', 'overcut', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
 
         // Панорамирование и zoom холста.
         const canvas = $('canvasWrap'), preview = $('preview');

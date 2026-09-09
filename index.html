@@ -1015,13 +1015,6 @@
         return { swap: base.swap, flipX: mirror ? !base.flipX : base.flipX, flipY: base.flipY };
       }
 
-      // Скрытая машинная коррекция. Для корректного реза на станке рез ВСЕГДА
-      // формируется с ориентацией 90° + зеркало (старт — правый нижний угол
-      // листа). На предпросмотре макет показывается читабельно (настройки
-      // «Поворот»/«Зеркало» привязаны к предпросмотру), но в команды уходит
-      // именно эта выверенная на станке ориентация.
-      const MACHINE_ORIENTATION = { swap: true, flipX: true, flipY: true }; // 90° · зеркало
-
       // referenceContours — контуры без компенсации ножа: по ним считается
       // габарит, чтобы превью макета и траектория реза легли одинаково.
       function machinePlace(contours, referenceContours, o) {
@@ -1209,7 +1202,7 @@
       // ============================================================
       function pointsForCommands() {
         const placed = transformedContours();
-        return machinePlace(placed.map(withOvercut), placed, MACHINE_ORIENTATION);
+        return machinePlace(placed.map(withOvercut), placed);
       }
       function createCommands() { return hpgl(pointsForCommands()); }
       function showCommands() {
@@ -1268,10 +1261,24 @@
         // WYSIWYG: показываем ровно ту геометрию, что уходит в рез.
         const originalDisplay = placedOriginal;
         const cutDisplay = placedCut;
-        const previewScale = Math.min(876 / Math.max(s.sheetW, .001), 610 / Math.max(s.sheetH, .001));
-        const previewW = s.sheetW * previewScale, previewH = s.sheetH * previewScale;
+        // Станок зеркалит вывод: макет на холсте отражаем вдоль длинной оси
+        // (по ней читается надпись), чтобы визуализация совпадала с резом.
+        // Рез при этом не меняется — исправляется только отображение.
+        {
+          const allPts = originalDisplay.flatMap(c => c.points);
+          let x0 = Infinity, x1 = -Infinity;
+          for (const [x] of allPts) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+          const cx = (x0 + x1) / 2;
+          const flip = c => { c.points = c.points.map(([x, y]) => [2 * cx - x, y]); };
+          originalDisplay.forEach(flip); cutDisplay.forEach(flip);
+        }
+        // Станок переворачивает оси: ось X (ширина листа) — вертикаль, ось Y
+        // (подача) — горизонталь. Холст рисуем в ориентации станка, чтобы
+        // предпросмотр совпадал с резом («что на экране — то на печати»).
+        const previewScale = Math.min(876 / Math.max(s.sheetH, .001), 610 / Math.max(s.sheetW, .001));
+        const previewW = s.sheetH * previewScale, previewH = s.sheetW * previewScale;
         const previewX = (1000 - previewW) / 2, previewY = (700 - previewH) / 2;
-        const map = p => [previewX + p[0] * previewScale, previewY + p[1] * previewScale];
+        const map = p => [previewX + p[1] * previewScale, previewY + p[0] * previewScale];
         const sheet = $('previewSheet');
         sheet.setAttribute('x', previewX); sheet.setAttribute('y', previewY);
         sheet.setAttribute('width', previewW); sheet.setAttribute('height', previewH);
@@ -1301,14 +1308,17 @@
             let dx0 = Infinity, dy0 = Infinity, dx1 = -Infinity, dy1 = -Infinity;
             for (const [x, y] of dimPts) { if (x < dx0) dx0 = x; if (y < dy0) dy0 = y; if (x > dx1) dx1 = x; if (y > dy1) dy1 = y; }
             const gap = 4; // мм — отступ размерной линии от детали
-            drawDimension($('previewDims'), map([dx0, dy0 - gap]), map([dx1, dy0 - gap]), `${fmt(dx1 - dx0)} мм`, false);
-            drawDimension($('previewDims'), map([dx0 - gap, dy0]), map([dx0 - gap, dy1]), `${fmt(dy1 - dy0)} мм`, true);
+            // Ширина (ось X) на станке идёт вертикально, высота (Y) — горизонтально.
+            drawDimension($('previewDims'), map([dx0, dy0 - gap]), map([dx1, dy0 - gap]), `${fmt(dx1 - dx0)} мм`, true);
+            drawDimension($('previewDims'), map([dx0 - gap, dy0]), map([dx0 - gap, dy1]), `${fmt(dy1 - dy0)} мм`, false);
           }
         }
         $('sheetLabel').setAttribute('y', Math.min(688, previewY + previewH + 25));
         $('sheetLabel').textContent = `${fmt(s.sheetW)} × ${fmt(s.sheetH)} мм · ${previewContours.length} контур(а)`;
         $('previewMeta').textContent = `${previewContours.length} контур(а) · компенсация ${fmt(s.knifeOffset)} мм · overcut ${fmt(s.overcut)} мм`;
-        $('coordinateCaption').textContent = 'Рез: 90° · зеркало (коррекция станка) · старт справа снизу · макет на холсте читабельный';
+        const degree = $('rotation').value;
+        const mirrorTxt = $('mirror').checked ? ' · зеркало' : '';
+        $('coordinateCaption').textContent = `Рез: ${degree}°${mirrorTxt} · размещение: правый нижний угол листа`;
         const allSegments = state.contours.reduce((sum, c) => sum + Math.max(0, c.points.length - 1) + (c.closed ? 1 : 0), 0);
         $('pathCount').textContent = state.contours.length;
         $('segmentCount').textContent = allSegments;

@@ -211,6 +211,19 @@
       stroke-width: .5;
     }
 
+    .dim {
+      stroke: #b9c7d6;
+      stroke-width: .8;
+      fill: none;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .dim-label {
+      fill: #6f8aa5;
+      font-size: 11px;
+      letter-spacing: .03em;
+    }
+
     .sheet-label {
       fill: #91a5ba;
       font-size: 12px;
@@ -829,7 +842,7 @@
             <rect id="previewSheet" class="sheet" x="62" y="45" width="876" height="610" rx="2" />
             <g id="previewOriginal"></g>
             <g id="previewCut"></g>
-            <g id="previewMarkers"></g><text id="sheetLabel" class="sheet-label" x="500" y="680"
+            <g id="previewMarkers"></g><g id="previewDims"></g><text id="sheetLabel" class="sheet-label" x="500" y="680"
               text-anchor="middle"></text>
           </svg>
           <div id="emptyState" class="empty-state">
@@ -845,10 +858,10 @@
           <h2 class="section-title">03 / Текущий рез <small>нож и траектория</small></h2>
           <div class="grid2">
             <div class="field"><label for="knifeOffset">Компенсация вылета ножа, мм</label><input id="knifeOffset"
-                type="number" value="0.5" min="0" max="5" step="0.01" /></div>
+                type="number" value="0.52" min="0" max="5" step="0.01" /></div>
             <div class="field"><label for="overcut">Overcut, мм</label><input id="overcut" type="number" value="1"
                 min="0" max="10" step="0.1" /></div>
-            <div class="field"><label for="leadIn">Подъезд, мм</label><input id="leadIn" type="number" value="2" min="0"
+            <div class="field"><label for="leadIn">Подъезд, мм</label><input id="leadIn" type="number" value="1.5" min="0"
                 max="50" step="0.1" /></div>
           </div>
           <div class="field"><label for="tolerance">Допуск, мм</label><input id="tolerance" type="number" value="0.15"
@@ -960,9 +973,9 @@
           current: $('origin').value === 'current',
           fit: $('fitToSheet').checked,
           resolution: num('resolution', 40),
-          knifeOffset: Math.max(0, num('knifeOffset', .5)),
+          knifeOffset: Math.max(0, num('knifeOffset', .52)),
           overcut: Math.max(0, num('overcut', 1)),
-          leadIn: Math.max(0, num('leadIn', 2)),
+          leadIn: Math.max(0, num('leadIn', 1.5)),
           tolerance: Math.max(.02, num('tolerance', .15)),
           showStart: $('showStart').checked
         };
@@ -1233,6 +1246,36 @@
         group.appendChild(element);
       }
 
+      // Размерная линия с двумя стрелками и подписью (габариты заготовки).
+      function drawDimension(group, a, b, label, vertical) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('class', 'dim');
+        line.setAttribute('x1', a[0]); line.setAttribute('y1', a[1]);
+        line.setAttribute('x2', b[0]); line.setAttribute('y2', b[1]);
+        group.appendChild(line);
+        const al = 6, aw = 4;
+        const arrow = document.createElementNS(ns, 'path');
+        arrow.setAttribute('class', 'dim');
+        arrow.setAttribute('d', vertical
+          ? `M${a[0]},${a[1]} l${-aw},${al} l${aw * 2},0 M${b[0]},${b[1]} l${-aw},${-al} l${aw * 2},0`
+          : `M${a[0]},${a[1]} l${al},${-aw} l0,${aw * 2} M${b[0]},${b[1]} l${-al},${-aw} l0,${aw * 2}`);
+        group.appendChild(arrow);
+        const text = document.createElementNS(ns, 'text');
+        text.setAttribute('class', 'dim-label');
+        text.setAttribute('text-anchor', 'middle');
+        if (vertical) {
+          text.setAttribute('x', a[0] + 12);
+          text.setAttribute('y', (a[1] + b[1]) / 2);
+          text.setAttribute('transform', `rotate(90 ${a[0] + 12} ${(a[1] + b[1]) / 2})`);
+        } else {
+          text.setAttribute('x', (a[0] + b[0]) / 2);
+          text.setAttribute('y', a[1] - 7);
+        }
+        text.textContent = label;
+        group.appendChild(text);
+      }
+
       function renderPreview() {
         const s = currentSettings();
         const transformed = transformedContours();
@@ -1272,6 +1315,18 @@
             $('previewMarkers').appendChild(marker);
           }
         });
+        // Габариты заготовки (детали) на чертеже.
+        $('previewDims').replaceChildren();
+        {
+          const dimPts = originalDisplay.flatMap(c => c.points);
+          if (dimPts.length) {
+            let dx0 = Infinity, dy0 = Infinity, dx1 = -Infinity, dy1 = -Infinity;
+            for (const [x, y] of dimPts) { if (x < dx0) dx0 = x; if (y < dy0) dy0 = y; if (x > dx1) dx1 = x; if (y > dy1) dy1 = y; }
+            const gap = 4; // мм — отступ размерной линии от детали
+            drawDimension($('previewDims'), map([dx0, dy0 - gap]), map([dx1, dy0 - gap]), `${fmt(dx1 - dx0)} мм`, false);
+            drawDimension($('previewDims'), map([dx0 - gap, dy0]), map([dx0 - gap, dy1]), `${fmt(dy1 - dy0)} мм`, true);
+          }
+        }
         $('sheetLabel').setAttribute('y', Math.min(688, previewY + previewH + 25));
         $('sheetLabel').textContent = `${fmt(s.sheetW)} × ${fmt(s.sheetH)} мм · ${previewContours.length} контур(а)`;
         $('previewMeta').textContent = `${previewContours.length} контур(а) · компенсация ${fmt(s.knifeOffset)} мм · overcut ${fmt(s.overcut)} мм`;

@@ -814,10 +814,10 @@
             <div class="field"><label for="scale">Масштаб</label><input id="scale" type="number" value="1" min="0.01"
                 max="100" step="0.01" /></div>
             <div class="field"><label for="rotation">Поворот</label><select id="rotation">
-                <option value="0">0°</option>
+                <option value="0" selected>0°</option>
                 <option value="90">90°</option>
                 <option value="180">180°</option>
-                <option value="270" selected>270°</option>
+                <option value="270">270°</option>
               </select></div>
           </div>
           <label class="check-row"><input id="mirror" type="checkbox" /><span>Зеркало<em>Отражение по
@@ -1007,10 +1007,11 @@
         const rot = Number($('rotation').value);
         const mirror = $('mirror').checked;
         const base = {
-          0:    { swap: false, flipX: false, flipY: false },
-          90:   { swap: true,  flipX: false, flipY: true  },
-          180:  { swap: false, flipX: true,  flipY: true  },
-          270:  { swap: true,  flipX: true,  flipY: false }
+          // 0° — штатное положение: макет горизонтально (как раньше 270°).
+          0:    { swap: true,  flipX: true,  flipY: false },
+          90:   { swap: false, flipX: false, flipY: false },
+          180:  { swap: true,  flipX: false, flipY: true  },
+          270:  { swap: false, flipX: true,  flipY: true  }
         }[rot] || { swap: false, flipX: false, flipY: false };
         return { swap: base.swap, flipX: mirror ? !base.flipX : base.flipX, flipY: base.flipY };
       }

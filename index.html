@@ -1261,24 +1261,29 @@
         // WYSIWYG: показываем ровно ту геометрию, что уходит в рез.
         const originalDisplay = placedOriginal;
         const cutDisplay = placedCut;
-        // Станок зеркалит вывод: макет на холсте отражаем вдоль длинной оси
-        // (по ней читается надпись), чтобы визуализация совпадала с резом.
-        // Рез при этом не меняется — исправляется только отображение.
+        // Лист в станке лежит вертикально, макет печатается вертикально (длинная
+        // ось по подаче вниз). Показываем макет вертикально у нижнего края листа,
+        // как он ляжет при печати. Рез при этом не меняется.
         {
           const allPts = originalDisplay.flatMap(c => c.points);
-          let x0 = Infinity, x1 = -Infinity;
-          for (const [x] of allPts) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
-          const cx = (x0 + x1) / 2;
-          const flip = c => { c.points = c.points.map(([x, y]) => [2 * cx - x, y]); };
-          originalDisplay.forEach(flip); cutDisplay.forEach(flip);
+          let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+          for (const [x, y] of allPts) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
+          const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+          const rot = pts => pts.map(([x, y]) => [cx + (y - cy), cy - (x - cx)]);
+          const r = rot(allPts);
+          let rx0 = Infinity, ry0 = Infinity, rx1 = -Infinity, ry1 = -Infinity;
+          for (const [x, y] of r) { if (x < rx0) rx0 = x; if (y < ry0) ry0 = y; if (x > rx1) rx1 = x; if (y > ry1) ry1 = y; }
+          const dx = s.sheetW - rx1, dy = s.sheetH - ry1;
+          const apply = c => { c.points = rot(c.points).map(([x, y]) => [x + dx, y + dy]); };
+          originalDisplay.forEach(apply); cutDisplay.forEach(apply);
         }
-        // Станок переворачивает оси: ось X (ширина листа) — вертикаль, ось Y
-        // (подача) — горизонталь. Холст рисуем в ориентации станка, чтобы
-        // предпросмотр совпадал с резом («что на экране — то на печати»).
-        const previewScale = Math.min(876 / Math.max(s.sheetH, .001), 610 / Math.max(s.sheetW, .001));
-        const previewW = s.sheetH * previewScale, previewH = s.sheetW * previewScale;
+        // Лист на холсте — портретно (как в программе: X — ширина, Y — подача).
+        // Ориентация макета задаётся настройкой «Поворот»: 0° — горизонтально,
+        // 90° — вертикально.
+        const previewScale = Math.min(876 / Math.max(s.sheetW, .001), 610 / Math.max(s.sheetH, .001));
+        const previewW = s.sheetW * previewScale, previewH = s.sheetH * previewScale;
         const previewX = (1000 - previewW) / 2, previewY = (700 - previewH) / 2;
-        const map = p => [previewX + p[1] * previewScale, previewY + p[0] * previewScale];
+        const map = p => [previewX + p[0] * previewScale, previewY + p[1] * previewScale];
         const sheet = $('previewSheet');
         sheet.setAttribute('x', previewX); sheet.setAttribute('y', previewY);
         sheet.setAttribute('width', previewW); sheet.setAttribute('height', previewH);
@@ -1308,9 +1313,8 @@
             let dx0 = Infinity, dy0 = Infinity, dx1 = -Infinity, dy1 = -Infinity;
             for (const [x, y] of dimPts) { if (x < dx0) dx0 = x; if (y < dy0) dy0 = y; if (x > dx1) dx1 = x; if (y > dy1) dy1 = y; }
             const gap = 4; // мм — отступ размерной линии от детали
-            // Ширина (ось X) на станке идёт вертикально, высота (Y) — горизонтально.
-            drawDimension($('previewDims'), map([dx0, dy0 - gap]), map([dx1, dy0 - gap]), `${fmt(dx1 - dx0)} мм`, true);
-            drawDimension($('previewDims'), map([dx0 - gap, dy0]), map([dx0 - gap, dy1]), `${fmt(dy1 - dy0)} мм`, false);
+            drawDimension($('previewDims'), map([dx0, dy0 - gap]), map([dx1, dy0 - gap]), `${fmt(dx1 - dx0)} мм`, false);
+            drawDimension($('previewDims'), map([dx0 - gap, dy0]), map([dx0 - gap, dy1]), `${fmt(dy1 - dy0)} мм`, true);
           }
         }
         $('sheetLabel').setAttribute('y', Math.min(688, previewY + previewH + 25));

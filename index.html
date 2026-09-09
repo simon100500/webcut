@@ -262,5 +262,133 @@
       finally { stagedSendActive = false; stagedSendButton.disabled = false; }
     });
   </script>
+  <script>
+    // CH340: аппаратный reset через DTR перед каждым заданием.
+    const stagedButtonBeforeDtr = $('sendBtn');
+    const dtrResetSendButton = stagedButtonBeforeDtr.cloneNode(true);
+    stagedButtonBeforeDtr.replaceWith(dtrResetSendButton);
+    let dtrResetActive = false;
+    dtrResetSendButton.addEventListener('click', async () => {
+      if (dtrResetActive) { log('Выполняется reset и отправка. Дождитесь готовности.'); return; }
+      showCommands();
+      if (!state.writer || !state.port) { log('Траектория не отправлена: сначала подключите COM-порт.'); return; }
+      dtrResetActive = true;
+      dtrResetSendButton.disabled = true;
+      dtrResetSendButton.textContent = 'Reset контроллера…';
+      try {
+        await state.port.setSignals({ dataTerminalReady: false });
+        await new Promise(resolve => setTimeout(resolve, 200));
+        await state.port.setSignals({ dataTerminalReady: true });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        dtrResetSendButton.textContent = 'Отправка траектории…';
+        await state.writer.write(new TextEncoder().encode(`${state.commandText}\r\n`));
+        log('DTR-reset выполнен. Отправлена рабочая HPGL-последовательность; в конце PU;SP0;.');
+      } catch (error) {
+        log(`DTR-reset или отправка не выполнены: ${error.message}`);
+      } finally {
+        dtrResetActive = false;
+        dtrResetSendButton.disabled = false;
+        dtrResetSendButton.textContent = 'Отправить траекторию';
+      }
+    });
+  </script>
+  <script>
+    // Второй диалект HPGL: PU с координатами поднимает перо, не снимая выбор инструмента через SP0.
+    const hpglDialectField = document.createElement('div');
+    hpglDialectField.className = 'field';
+    const hpglDialectLabel = document.createElement('label');
+    hpglDialectLabel.htmlFor = 'hpglDialect';
+    hpglDialectLabel.textContent = 'Режим HPGL';
+    const hpglDialectSelect = document.createElement('select');
+    hpglDialectSelect.id = 'hpglDialect';
+    hpglDialectSelect.append(
+      new Option('Повторная резка · PU с координатами', 'repeat'),
+      new Option('Старый режим · SP0 в конце', 'legacy')
+    );
+    hpglDialectField.append(hpglDialectLabel, hpglDialectSelect);
+    protocolSelect.closest('.field').after(hpglDialectField);
+
+    hpgl = function(commandsContours) {
+      const legacy = hpglDialectSelect.value === 'legacy';
+      const lines = ['IN;', 'SP1;'];
+      commandsContours.forEach(contour => {
+        const points = contour.points.map(toDevicePoint);
+        if (!points.length) return;
+        lines.push(`PU${points[0][0]},${points[0][1]};`);
+        if (points.length > 1) lines.push(`PD${points.slice(1).map(point => point.join(',')).join(',')};`);
+        const last = points[points.length - 1];
+        // Некоторые контроллеры игнорируют PU в той же точке; минимальный jog в 1 unit (0,025 мм) физически поднимает перо.
+        lines.push(`PU${last[0] + 1},${last[1]};`);
+      });
+      if (legacy) lines.push('SP0;');
+      return lines.join('\n');
+    };
+
+    const dtrButtonBeforeDialect = $('sendBtn');
+    const dialectSendButton = dtrButtonBeforeDialect.cloneNode(true);
+    dtrButtonBeforeDialect.replaceWith(dialectSendButton);
+    let dialectSendActive = false;
+    dialectSendButton.addEventListener('click', async () => {
+      if (dialectSendActive) { log('Дождитесь завершения текущей отправки.'); return; }
+      showCommands();
+      if (!state.writer || !state.port) { log('Траектория не отправлена: сначала подключите COM-порт.'); return; }
+      dialectSendActive = true;
+      dialectSendButton.disabled = true;
+      try {
+        if (hpglDialectSelect.value === 'legacy') {
+          dialectSendButton.textContent = 'Reset контроллера…';
+          await state.port.setSignals({ dataTerminalReady: false });
+          await new Promise(resolve => setTimeout(resolve, 200));
+          await state.port.setSignals({ dataTerminalReady: true });
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        dialectSendButton.textContent = 'Отправка траектории…';
+        await state.writer.write(new TextEncoder().encode(`${state.commandText}\r\n`));
+        log(hpglDialectSelect.value === 'repeat'
+          ? 'HPGL повторной резки отправлен: подъём через PU с jog 0,025 мм, без SP0.'
+          : 'Старый HPGL отправлен: подъём через SP0.');
+      } catch (error) { log(`Ошибка отправки: ${error.message}`); }
+      finally {
+        dialectSendActive = false;
+        dialectSendButton.disabled = false;
+        dialectSendButton.textContent = 'Отправить траекторию';
+      }
+    });
+    hpglDialectSelect.addEventListener('change', () => { renderPreview(); showCommands(); });
+
+    // DMPL нужен как отдельный физический протокол, а не как вариант HPGL.
+    // Его последовательность совместима со старым рабочим cutter-test:
+    // H; M...; D...; U;. В отличие от HPGL, DMPL не использует SP/PU/PD.
+    const dmplOption = [...protocolSelect.options].find(option => option.value === 'DMPL');
+    if (!dmplOption) protocolSelect.append(new Option('DMPL', 'DMPL'));
+    const baseDmpl = dmpl;
+    dmpl = function(commandsContours) {
+      const lines = ['H;'];
+      commandsContours.forEach(contour => {
+        const points = contour.points.map(toDevicePoint);
+        if (!points.length) return;
+        lines.push(`M${points[0][0]},${points[0][1]};`);
+        if (points.length > 1) lines.push(`D${points.slice(1).map(point => point.join(',')).join(',')};`);
+        lines.push('U;');
+      });
+      return lines.join('\n');
+    };
+    const refreshProtocolUi = () => {
+      const isDmpl = protocolSelect.value === 'DMPL';
+      hpglDialectField.hidden = isDmpl;
+      if (isDmpl) showCommands();
+    };
+    protocolSelect.addEventListener('change', refreshProtocolUi);
+    refreshProtocolUi();
+
+    // После подъёма явно снимаем выбранный инструмент. Это выключает
+    // соленоид у контроллеров, которые оставляют SP1 активным после PU.
+    const originalHpgl = hpgl;
+    hpgl = function(commandsContours) {
+      const command = originalHpgl(commandsContours);
+      return command.endsWith('SP0;') ? command : `${command}\nSP0;`;
+    };
+    renderPreview();
+  </script>
 </body>
 </html>

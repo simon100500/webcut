@@ -1284,12 +1284,22 @@
         // картинка на листе — ровно то, что уйдёт в команды.
         const placedOriginal = machinePlace(transformed, transformed);
         const placedCut = machinePlace(previewContours, transformed);
-        // На холсте показываем макет читабельно: снимаем машинные поворот и
-        // зеркало (только отображение), команды реза при этом не меняются.
+        // На холсте показываем макет читабельно: снимаем машинный поворот
+        // (только отображение), а зеркало отражаем на чертеже. Команды реза
+        // при этом не меняются.
         const o = parseOrientation();
         const displayRef = placedOriginal.flatMap(c => c.points);
         const originalDisplay = placedOriginal.map(c => ({ ...c, points: previewUnorient(c.points, displayRef, s, o) }));
         const cutDisplay = placedCut.map(c => ({ ...c, points: previewUnorient(c.points, displayRef, s, o) }));
+        // Зеркало на холсте: горизонтальный флип детали вокруг её оси.
+        if ($('mirror').checked) {
+          const allPts = originalDisplay.flatMap(c => c.points);
+          let x0 = Infinity, x1 = -Infinity;
+          for (const [x] of allPts) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+          const cx = (x0 + x1) / 2;
+          originalDisplay.forEach(c => { c.points = c.points.map(([x, y]) => [2 * cx - x, y]); });
+          cutDisplay.forEach(c => { c.points = c.points.map(([x, y]) => [2 * cx - x, y]); });
+        }
         const previewScale = Math.min(876 / Math.max(s.sheetW, .001), 610 / Math.max(s.sheetH, .001));
         const previewW = s.sheetW * previewScale, previewH = s.sheetH * previewScale;
         const previewX = (1000 - previewW) / 2, previewY = (700 - previewH) / 2;
@@ -1311,7 +1321,7 @@
             const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             marker.setAttribute('class', 'cut-point');
             const m = map(contour.points[0]);
-            marker.setAttribute('cx', m[0]); marker.setAttribute('cy', m[1]); marker.setAttribute('r', 5);
+            marker.setAttribute('cx', m[0]); marker.setAttribute('cy', m[1]); marker.setAttribute('r', 2);
             $('previewMarkers').appendChild(marker);
           }
         });

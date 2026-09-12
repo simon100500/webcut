@@ -887,10 +887,12 @@
             <div class="field"><label for="insetBottom">Отступ снизу, мм</label><input id="insetBottom" type="number"
                 value="0" min="0" max="2000" step="0.5" /></div>
           </div>
-          <div class="field"><label for="instanceGap">Между экземплярами, мм</label><input id="instanceGap" type="number"
-              value="10" min="0" max="200" step="0.5" /></div>
-          <div class="field"><label for="copies">Экземпляров</label><input id="copies" type="number" value="1"
-              min="1" max="2000" step="1" title="Заполнение листа: в строке справа налево, строки снизу вверх" /></div>
+          <div class="grid2">
+            <div class="field"><label for="copies">Экземпляров</label><input id="copies" type="number" value="1"
+                min="1" max="2000" step="1" title="Заполнение листа: в строке справа налево, строки снизу вверх" /></div>
+            <div class="field" id="instanceGapField" hidden><label for="instanceGap" title="Между рамками экземпляров (или фигурами, если рамка выключена)">Зазор, мм</label><input
+                id="instanceGap" type="number" value="10" min="0" max="200" step="0.5" /></div>
+          </div>
           <label class="check-row" style="margin-top: 12px"><input id="showStart" type="checkbox" checked /><span>Показывать
               точки старта<em>Зелёная — начало, оранжевая — overcut</em></span></label>
           <div class="button-row" style="margin-top: 14px"><button id="sendBtn" class="primary">Вырезать</button><button
@@ -973,7 +975,7 @@
       // ============================================================
       const $ = id => document.getElementById(id);
       const log = message => { const el = $('log'); el.textContent += '\n' + message; el.scrollTop = el.scrollHeight; };
-      const num = (id, fallback) => { const value = Number($(id).value); return Number.isFinite(value) ? value : fallback; };
+      const num = (id, fallback) => { const value = Number(String($(id).value).replace(',', '.')); return Number.isFinite(value) ? value : fallback; };
       const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
       const fmt = value => Number(value.toFixed(2));
       // «1 контур / 3 контура / 5 контуров» для статусной строки.
@@ -1312,12 +1314,16 @@
         const w = Math.max(x1 - x0, .001), h = Math.max(y1 - y0, .001);
         const m = Math.max(0, num('trimMargin', 5));
         const gap = s.instanceGap;
-        const cellW = w + gap, cellH = h + gap;
-        const cols = Math.max(1, Math.floor((s.sheetW - s.insetRight + gap) / cellW));
-        const rows = Math.max(1, Math.floor((s.sheetH - s.insetBottom + gap) / cellH));
-        const count = Math.max(1, Math.min(Math.round(num('copies', 1)), cols * rows));
         const frame = $('trimFrame').checked;
-        const outer = frame ? m : 0;
+        const outer = frame ? m : 0; // рамка выступает на m с каждой стороны фигуры
+        // «Между экземплярами» — зазор между РАМКАМИ соседних копий, если
+        // рамка включена, иначе — между самими фигурами.
+        const cellW = w + 2 * outer + gap, cellH = h + 2 * outer + gap;
+        // Вместимость: габарит сетки вместе с крайними рамками должен
+        // уместиться в лист с учётом отступов справа/снизу.
+        const cols = Math.max(1, Math.floor((s.sheetW - s.insetRight - w - 2 * outer - gap) / cellW) + 1);
+        const rows = Math.max(1, Math.floor((s.sheetH - s.insetBottom - h - 2 * outer - gap) / cellH) + 1);
+        const count = Math.max(1, Math.min(Math.round(num('copies', 1)), cols * rows));
         const usedCols = Math.min(count, cols), usedRows = Math.ceil(count / cols);
         const ref = {
           points: [[-(usedCols - 1) * cellW - outer, -(usedRows - 1) * cellH - outer], [w + outer, -(usedRows - 1) * cellH - outer], [w + outer, h + outer], [-(usedCols - 1) * cellW - outer, h + outer]],
@@ -1407,8 +1413,10 @@
 
       function renderPreview() {
         const s = currentSettings();
-        // Поле отступа рамки видно только при включённой рамке.
+        // Поле отступа рамки видно только при включённой рамке, поле зазора
+        // между экземплярами — только когда экземпляров больше одного.
         $('trimMarginField').hidden = !$('trimFrame').checked;
+        $('instanceGapField').hidden = num('copies', 1) <= 1;
         const transformed = transformedContours();
         const { list: previewContours, ref: gridRef } = contoursForCut();
         // Превью и рез используют одно и то же преобразование machinePlace:

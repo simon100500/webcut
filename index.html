@@ -92,6 +92,19 @@
       font-size: 12px;
     }
 
+    .header-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .header-center .file-name {
+      margin: 0;
+    }
+
     .device-status {
       display: flex;
       align-items: center;
@@ -138,26 +151,6 @@
 
     .canvas-card {
       overflow: hidden;
-    }
-
-    .card-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      padding: 15px 18px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .card-head h2 {
-      margin: 0;
-      font-size: 14px;
-      letter-spacing: -.01em;
-    }
-
-    .subtle {
-      color: var(--muted);
-      font-size: 12px;
     }
 
     .canvas-wrap {
@@ -230,6 +223,11 @@
       vector-effect: non-scaling-stroke;
     }
 
+    .dim-arrow {
+      fill: #9fb2c6;
+      stroke: none;
+    }
+
     .dim-label {
       fill: #6f8aa5;
       font-size: 11px;
@@ -257,11 +255,16 @@
     }
 
     .drop-zone {
-      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 14px;
       border: 1px dashed #9cb4ce;
       border-radius: 9px;
       background: #f5f9ff;
-      text-align: center;
+      white-space: nowrap;
+      font-size: 12px;
+      color: var(--muted);
       transition: border .15s, background .15s;
     }
 
@@ -271,16 +274,8 @@
     }
 
     .drop-zone strong {
-      display: block;
-      margin-bottom: 1px;
       color: var(--text);
-      font-size: 12px;
-    }
-
-    .drop-zone span {
-      display: block;
-      color: var(--muted);
-      font-size: 11px;
+      font-weight: 700;
     }
 
     .drop-zone input {
@@ -288,10 +283,7 @@
     }
 
     .drop-zone label {
-      display: inline-flex;
-      margin-top: 5px;
       color: var(--blue);
-      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
     }
@@ -328,28 +320,33 @@
       padding-top: 16px;
     }
 
-    .sidebar-right .section-title {
-      color: var(--blue-dark);
-    }
-
-    .section-title {
+    .rotation-btn {
       display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 12px;
-      margin: 0 0 14px;
-      color: var(--text);
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: .09em;
-      text-transform: uppercase;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
     }
 
-    .section-title small {
-      color: var(--muted);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: .04em;
+    .spoiler summary {
+      display: block;
+      color: #62788f;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .spoiler summary:hover {
+      color: var(--text);
+    }
+
+    .spoiler[open] summary {
+      margin-bottom: 10px;
+    }
+
+    .spoiler .grid2 {
+      margin-top: 10px;
     }
 
     .field {
@@ -512,15 +509,6 @@
       white-space: pre-wrap;
     }
 
-    .warning {
-      padding: 10px 11px;
-      border: 1px solid #f3d8aa;
-      border-radius: 8px;
-      color: #93601a;
-      background: #fff9ed;
-      font-size: 11px;
-    }
-
     /* Figma-like workspace shell: fixed tool columns, uninterrupted center canvas. */
     html,
     body {
@@ -579,17 +567,11 @@
       box-shadow: none;
     }
 
-    .card-head {
-      min-height: 58px;
-      padding: 12px 18px;
-      background: #fff;
-    }
-
     .canvas-wrap {
       /* Блочный поток: grid-центрирование ломает height:100% у svg —
          элемент раздувается по пропорции viewBox и уходит за нижний край. */
       display: block;
-      height: calc(100% - 103px);
+      height: calc(100% - 45px);
       min-height: 0;
       padding: 0;
       overflow: hidden;
@@ -663,7 +645,7 @@
       }
 
       .canvas-wrap {
-        height: calc(100% - 103px);
+        height: calc(100% - 45px);
       }
     }
 
@@ -764,6 +746,11 @@
           <p>Рабочее место для точной резки</p>
         </div>
       </div>
+      <div class="header-center">
+        <div id="dropZone" class="drop-zone"><strong>Перетащите SVG сюда</strong><span>или</span><label
+            for="fileInput">выберите файл</label><input id="fileInput" type="file" accept=".svg,image/svg+xml" /></div>
+        <div id="fileName" class="file-name">Тестовый контур</div>
+      </div>
       <div class="top-actions">
         <div class="device-status"><span id="statusLight" class="status-light"></span><span id="statusText">Плоттер не
             подключён</span></div><button id="connectBtn" class="outline">Подключить COM</button>
@@ -772,32 +759,29 @@
     <div class="workspace">
       <aside class="card sidebar sidebar-left">
         <section class="section">
-          <h2 class="section-title">01 / Контур <small>SVG</small></h2>
-          <div id="dropZone" class="drop-zone"><strong>Перетащите SVG сюда</strong><span>или выберите файл с
-              компьютера</span><label for="fileInput">Выбрать файл</label><input id="fileInput" type="file"
-              accept=".svg,image/svg+xml" /></div>
-          <div id="fileName" class="file-name">Тестовый контур</div>
-        </section>
-        <section class="section">
-          <h2 class="section-title">02 / Лист <small>размещение</small></h2>
-          <div class="grid2">
-            <div class="field"><label for="sheetWidth">Ширина, мм</label><input id="sheetWidth" type="number"
-                value="210" min="10" max="2000" step="1" /></div>
-            <div class="field"><label for="sheetHeight">Высота, мм</label><input id="sheetHeight" type="number"
-                value="297" min="10" max="2000" step="1" /></div>
-          </div>
+          <details class="spoiler">
+            <summary>Размеры листа</summary>
+            <div class="grid2">
+              <div class="field"><label for="sheetWidth">Ширина, мм</label><input id="sheetWidth" type="number"
+                  value="210" min="10" max="2000" step="1" /></div>
+              <div class="field"><label for="sheetHeight">Высота, мм</label><input id="sheetHeight" type="number"
+                  value="297" min="10" max="2000" step="1" /></div>
+            </div>
+          </details>
           <div class="grid2">
             <div class="field"><label for="designWidth">Ширина макета, мм</label><input id="designWidth" type="number"
                 value="20" min="0.1" max="2000" step="0.1" /></div>
             <div class="field"><label for="designHeight">Высота макета, мм</label><input id="designHeight" type="number"
                 value="30" min="0.1" max="2000" step="0.1" /></div>
           </div>
-          <div class="field"><label for="rotation">Поворот</label><select id="rotation">
-              <option value="0" selected>0°</option>
-              <option value="90">90°</option>
-              <option value="180">180°</option>
-              <option value="270">270°</option>
-            </select></div>
+          <div class="field"><label for="rotation">Поворот</label><button id="rotation" class="outline rotation-btn"
+              type="button" value="0">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg><span id="rotationValue">0°</span>
+            </button></div>
           <label class="check-row"><input id="mirror" type="checkbox" /><span>Зеркало<em>Отражение по
                 горизонтали</em></span></label>
           <label class="check-row"><input id="fitToSheet" type="checkbox" /><span>Вписать в
@@ -812,16 +796,10 @@
             <div class="field"><label for="insetBottom">Отступ снизу, мм</label><input id="insetBottom" type="number"
                 value="0" min="0" max="2000" step="0.5" /></div>
           </div>
-          <p class="hint">Фигура стоит с отступами от правого и нижнего края листа. При включённой рамке отступы
-            автоматически не меньше отступа рамки — рамка всегда умещается на листе.</p>
+          <button id="resetBtn" class="outline" style="width: 100%; margin-top: 12px">Сбросить настройки</button>
         </section>
       </aside>
       <section class="card canvas-card">
-        <div class="card-head">
-          <div>
-            <h2>Предпросмотр макета</h2><span id="previewMeta" class="subtle">Тестовый контур готов</span>
-          </div><span id="unitMeta" class="subtle">мм</span>
-        </div>
         <div id="canvasWrap" class="canvas-wrap"><svg id="preview" viewBox="0 0 1000 700"
             preserveAspectRatio="xMidYMax meet" role="img" aria-label="Предпросмотр резки SVG">
             <defs>
@@ -832,8 +810,11 @@
             <rect id="previewSheet" class="sheet" x="62" y="45" width="876" height="610" rx="2" />
             <g id="previewOriginal"></g>
             <g id="previewCut"></g>
-            <g id="previewMarkers"></g><g id="previewDims"></g><text id="sheetLabel" class="sheet-label" x="500" y="680"
-              text-anchor="middle"></text>
+            <g id="previewMarkers"></g><g id="previewDims"></g>
+            <text id="sheetLabelTop" class="sheet-label" text-anchor="middle"></text>
+            <text id="sheetLabelBottom" class="sheet-label" text-anchor="middle"></text>
+            <text id="sheetLabelLeft" class="sheet-label" text-anchor="middle"></text>
+            <text id="sheetLabelRight" class="sheet-label" text-anchor="middle"></text>
           </svg>
           <div id="emptyState" class="empty-state">
             <div><strong>Загрузите SVG, чтобы увидеть контур</strong><br><span>Поддерживаются path, rect, circle,
@@ -845,7 +826,6 @@
       </section>
       <aside class="card inspector sidebar sidebar-right">
         <section class="section">
-          <h2 class="section-title">03 / Текущий рез <small>нож и траектория</small></h2>
           <div class="grid2">
             <div class="field"><label for="knifeOffset">Компенсация вылета ножа, мм</label><input id="knifeOffset"
                 type="number" value="0.52" min="0" max="5" step="0.01" /></div>
@@ -857,10 +837,9 @@
           <div class="field"><label for="tolerance">Допуск, мм</label><input id="tolerance" type="number" value="0.15"
               min="0.02" max="2" step="0.01" /></div><label class="check-row"><input id="showStart" type="checkbox"
               checked /><span>Показывать точки старта<em>Зелёная — начало, оранжевая — overcut</em></span></label>
-          <p class="hint">Компенсация меняет траекторию держателя с учётом поворота ножа.</p>
         </section>
         <section class="section">
-          <h2 class="section-title">04 / Параметры реза <small>HPGL · COM</small></h2><select id="protocol" hidden>
+          <select id="protocol" hidden>
             <option value="HPGL" selected>HPGL</option>
           </select>
           <div class="grid2">
@@ -876,13 +855,11 @@
                 <option>115200</option>
               </select></div>
           </div>
-          <div class="warning">Перед первым проходом проверьте нож на обрезке материала.</div>
           <div class="button-row" style="margin-top: 12px"><button id="previewBtn" class="secondary">Показать
               команды</button><button id="stopBtn" class="stop">Стоп</button></div><button id="sendBtn"
             class="primary">Отправить траекторию</button>
         </section>
         <section class="section">
-          <h2 class="section-title">Журнал <small>состояние</small></h2>
           <div id="log" class="log">Готово. Импортируйте SVG или проверьте встроенный квадрат.</div>
         </section>
       </aside>
@@ -1280,34 +1257,37 @@
         });
       }
 
-      // Размерная линия с двумя стрелками и подписью (габариты заготовки).
-      function drawDimension(group, a, b, label, vertical) {
+      // Размер в техническом стиле: выносные линии от измеряемых углов,
+      // залитые стрелки на размерной линии, подпись снаружи. offset — отступ
+      // размерной линии наружу в px (вверх у горизонтальной, влево у вертикальной).
+      function drawDimension(group, p1, p2, offset, label, vertical) {
         const ns = 'http://www.w3.org/2000/svg';
-        const line = document.createElementNS(ns, 'line');
-        line.setAttribute('class', 'dim');
-        line.setAttribute('x1', a[0]); line.setAttribute('y1', a[1]);
-        line.setAttribute('x2', b[0]); line.setAttribute('y2', b[1]);
-        group.appendChild(line);
-        const al = 6, aw = 4;
-        const arrow = document.createElementNS(ns, 'path');
-        arrow.setAttribute('class', 'dim');
-        arrow.setAttribute('d', vertical
-          ? `M${a[0]},${a[1]} l${-aw},${al} l${aw * 2},0 M${b[0]},${b[1]} l${-aw},${-al} l${aw * 2},0`
-          : `M${a[0]},${a[1]} l${al},${-aw} l0,${aw * 2} M${b[0]},${b[1]} l${-al},${-aw} l0,${aw * 2}`);
-        group.appendChild(arrow);
-        const text = document.createElementNS(ns, 'text');
-        text.setAttribute('class', 'dim-label');
-        text.setAttribute('text-anchor', 'middle');
+        const el = (tag, attrs) => {
+          const node = document.createElementNS(ns, tag);
+          for (const k in attrs) node.setAttribute(k, attrs[k]);
+          group.appendChild(node);
+          return node;
+        };
+        const line = attrs => el('line', Object.assign({ class: 'dim' }, attrs));
+        const gap = 3, over = 11, al = 12, aw = 2; // выносные линии и стрелки, px
         if (vertical) {
-          text.setAttribute('x', a[0] + 12);
-          text.setAttribute('y', (a[1] + b[1]) / 2);
-          text.setAttribute('transform', `rotate(90 ${a[0] + 12} ${(a[1] + b[1]) / 2})`);
+          const x = p1[0] - offset;
+          const y1 = Math.min(p1[1], p2[1]), y2 = Math.max(p1[1], p2[1]);
+          line({ x1: p1[0] - gap, y1: p1[1], x2: x - over, y2: p1[1] });
+          line({ x1: p2[0] - gap, y1: p2[1], x2: x - over, y2: p2[1] });
+          line({ x1: x, y1, x2: x, y2: y2 });
+          el('path', { class: 'dim-arrow', d: `M${x},${y1} l${aw},${al} l${-2 * aw},0 Z M${x},${y2} l${aw},${-al} l${-2 * aw},0 Z` });
+          const tx = x - 5, ty = (y1 + y2) / 2;
+          el('text', { class: 'dim-label', x: tx, y: ty, 'text-anchor': 'middle', transform: `rotate(-90 ${tx} ${ty})` }).textContent = label;
         } else {
-          text.setAttribute('x', (a[0] + b[0]) / 2);
-          text.setAttribute('y', a[1] - 7);
+          const y = p1[1] - offset;
+          const x1 = Math.min(p1[0], p2[0]), x2 = Math.max(p1[0], p2[0]);
+          line({ x1: p1[0], y1: p1[1] - gap, x2: p1[0], y2: y - over });
+          line({ x1: p2[0], y1: p2[1] - gap, x2: p2[0], y2: y - over });
+          line({ x1, y1: y, x2, y2: y });
+          el('path', { class: 'dim-arrow', d: `M${x1},${y} l${al},${aw} l0,${-2 * aw} Z M${x2},${y} l${-al},${aw} l0,${-2 * aw} Z` });
+          el('text', { class: 'dim-label', x: (x1 + x2) / 2, y: y - 5, 'text-anchor': 'middle' }).textContent = label;
         }
-        text.textContent = label;
-        group.appendChild(text);
       }
 
       function renderPreview() {
@@ -1364,24 +1344,36 @@
             $('previewMarkers').appendChild(marker);
           }
         });
-        // Габариты заготовки (детали) на чертеже.
+        // Габариты заготовки на чертеже: размерные линии выносим наружу —
+        // за рамку обрезки, если она включена.
         $('previewDims').replaceChildren();
         {
           const dimPts = originalDisplay.flatMap(c => c.points);
           if (dimPts.length) {
             let dx0 = Infinity, dy0 = Infinity, dx1 = -Infinity, dy1 = -Infinity;
             for (const [x, y] of dimPts) { if (x < dx0) dx0 = x; if (y < dy0) dy0 = y; if (x > dx1) dx1 = x; if (y > dy1) dy1 = y; }
-            const gap = 4; // мм — отступ размерной линии от детали
-            drawDimension($('previewDims'), map([dx0, dy0 - gap]), map([dx1, dy0 - gap]), `${fmt(dx1 - dx0)} мм`, false);
-            drawDimension($('previewDims'), map([dx0 - gap, dy0]), map([dx0 - gap, dy1]), `${fmt(dy1 - dy0)} мм`, true);
+            const offset = previewScale * (6 + ($('trimFrame').checked ? Math.max(0, num('trimMargin', 5)) : 0));
+            drawDimension($('previewDims'), map([dx0, dy0]), map([dx1, dy0]), offset, `${fmt(dx1 - dx0)} мм`, false);
+            drawDimension($('previewDims'), map([dx0, dy0]), map([dx0, dy1]), offset, `${fmt(dy1 - dy0)} мм`, true);
           }
         }
         // Точка старта каретки — правый нижний угол фигуры (совпадает с углом листа).
         drawCrosshair($('previewDims'), map([s.sheetW, s.sheetH]), 12);
-        $('sheetLabel').setAttribute('y', Math.min(688, previewY + previewH + 25));
-        $('sheetLabel').textContent = `${fmt(s.sheetW)} × ${fmt(s.sheetH)} мм · ${previewContours.length} контур(а)`;
-        $('previewMeta').textContent = `${previewContours.length} контур(а) · компенсация ${fmt(s.knifeOffset)} мм · overcut ${fmt(s.overcut)} мм`;
+        // Размеры листа подписаны по всем четырём сторонам.
+        const midX = previewX + previewW / 2, midY = previewY + previewH / 2;
+        const wTxt = `${fmt(s.sheetW)} мм`, hTxt = `${fmt(s.sheetH)} мм`;
+        const lbl = (id, x, y, txt, rot) => {
+          const t = $(id);
+          t.setAttribute('x', x); t.setAttribute('y', y);
+          t.setAttribute('transform', rot ? `rotate(${rot} ${x} ${y})` : '');
+          t.textContent = txt;
+        };
+        lbl('sheetLabelTop', midX, previewY - 8, wTxt);
+        lbl('sheetLabelBottom', midX, Math.min(694, previewY + previewH + 16), wTxt);
+        lbl('sheetLabelLeft', previewX - 8, midY, hTxt, -90);
+        lbl('sheetLabelRight', previewX + previewW + 8, midY, hTxt, 90);
         const degree = $('rotation').value;
+        $('rotationValue').textContent = `${degree}°`;
         const mirrorTxt = $('mirror').checked ? ' · зеркало' : '';
         $('coordinateCaption').textContent = `Рез: ${degree}°${mirrorTxt} · каретка — правый нижний угол листа`;
         const allSegments = state.contours.reduce((sum, c) => sum + Math.max(0, c.points.length - 1) + (c.closed ? 1 : 0), 0);
@@ -1481,6 +1473,17 @@
         $('fileName').textContent = state.fileName;
         $('designWidth').value = state.designWidth;
         $('designHeight').value = state.designHeight;
+        // Снимок значений по умолчанию: кнопка «Сбросить настройки» возвращает
+        // все поля (лист, макет — к натуральной величине, нож, рамку, отступы,
+        // Baud) к этому состоянию.
+        const initial = {};
+        ['sheetWidth', 'sheetHeight', 'designWidth', 'designHeight', 'rotation', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'resolution', 'baud'].forEach(id => initial[id] = $(id).value);
+        ['mirror', 'fitToSheet', 'trimFrame', 'showStart'].forEach(id => initial[id] = $(id).checked);
+        $('resetBtn').addEventListener('click', () => {
+          Object.entries(initial).forEach(([id, v]) => { const el = $(id); if (typeof v === 'boolean') el.checked = v; else el.value = v; });
+          renderPreview();
+          log('Настройки сброшены к значениям по умолчанию.');
+        });
         $('fileInput').addEventListener('change', event => importSvg(event.target.files[0]));
         $('dropZone').addEventListener('dragover', event => { event.preventDefault(); $('dropZone').classList.add('dragover'); });
         $('dropZone').addEventListener('dragleave', () => $('dropZone').classList.remove('dragover'));
@@ -1501,7 +1504,12 @@
         };
         $('designWidth').addEventListener('input', () => { syncDesignSize('designWidth'); renderPreview(); });
         $('designHeight').addEventListener('input', () => { syncDesignSize('designHeight'); renderPreview(); });
-        ['sheetWidth', 'sheetHeight', 'rotation', 'mirror', 'fitToSheet', 'trimFrame', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
+        ['sheetWidth', 'sheetHeight', 'mirror', 'fitToSheet', 'trimFrame', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
+        // Поворот: циклическая кнопка 0° → 90° → 180° → 270° → 0°.
+        $('rotation').addEventListener('click', () => {
+          $('rotation').value = (Number($('rotation').value) + 90) % 360;
+          renderPreview();
+        });
 
         // Панорамирование и zoom холста.
         const canvas = $('canvasWrap'), preview = $('preview');

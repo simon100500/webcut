@@ -339,6 +339,11 @@
       background: #fbfdff;
     }
 
+    .divider {
+      margin: 14px 0;
+      border-top: 1px solid var(--line);
+    }
+
     .spoiler summary {
       display: flex;
       align-items: center;
@@ -870,17 +875,20 @@
             </button>
           </div>
           <input id="mirror" type="checkbox" hidden />
-          <div class="field"><button id="fitWidthBtn" class="outline rotation-btn" type="button"
+          <div class="field" style="margin-top: 14px"><button id="fitWidthBtn" class="outline rotation-btn" type="button"
               title="Растянуть макет на всю ширину листа (с учётом отступа справа)">По ширине листа</button></div>
           <label class="check-row"><input id="trimFrame" type="checkbox" /><span>Обрезать рамкой</span></label>
           <div class="field" id="trimMarginField" hidden style="margin-top: 11px"><label for="trimMargin">Отступ рамки,
               мм</label><input id="trimMargin" type="number" value="5" min="0" max="200" step="0.5" /></div>
+          <div class="divider"></div>
           <div class="grid2">
             <div class="field"><label for="insetRight">Отступ справа, мм</label><input id="insetRight" type="number"
                 value="0" min="0" max="2000" step="0.5" /></div>
             <div class="field"><label for="insetBottom">Отступ снизу, мм</label><input id="insetBottom" type="number"
                 value="0" min="0" max="2000" step="0.5" /></div>
           </div>
+          <div class="field"><label for="instanceGap">Между экземплярами, мм</label><input id="instanceGap" type="number"
+              value="10" min="0" max="200" step="0.5" /></div>
           <div class="field"><label for="copies">Экземпляров</label><input id="copies" type="number" value="1"
               min="1" max="2000" step="1" title="Заполнение листа: в строке справа налево, строки снизу вверх" /></div>
           <label class="check-row" style="margin-top: 12px"><input id="showStart" type="checkbox" checked /><span>Показывать
@@ -1024,10 +1032,6 @@
       // Текущие настройки интерфейса, собранные в один объект.
       // ============================================================
       function currentSettings() {
-        // Отступы фигуры от правого/нижнего края листа. При включённой рамке
-        // они автоматически не меньше отступа рамки — иначе рамка выйдет за
-        // пределы материала.
-        const frameExtra = $('trimFrame').checked ? Math.max(0, num('trimMargin', 5)) : 0;
         return {
           sheetW: num('sheetWidth', 210),
           sheetH: num('sheetHeight', 297),
@@ -1035,8 +1039,9 @@
           // пропорцию и в расчёте не участвует.
           scale: clamp(num('designWidth', state.designWidth) / Math.max(state.designWidth, .001), .01, 100),
           rotation: Number($('rotation').value),
-          insetRight: Math.max(Math.max(0, num('insetRight', 0)), frameExtra),
-          insetBottom: Math.max(Math.max(0, num('insetBottom', 0)), frameExtra),
+          insetRight: Math.max(0, num('insetRight', 0)),
+          insetBottom: Math.max(0, num('insetBottom', 0)),
+          instanceGap: Math.max(0, num('instanceGap', 10)),
           resolution: num('resolution', 40),
           knifeOffset: Math.max(0, num('knifeOffset', .52)),
           overcut: Math.max(0, num('overcut', 1)),
@@ -1306,9 +1311,10 @@
         if (!Number.isFinite(x0)) return { list, ref: { points: [[0, 0]], closed: true } };
         const w = Math.max(x1 - x0, .001), h = Math.max(y1 - y0, .001);
         const m = Math.max(0, num('trimMargin', 5));
-        const cellW = w + 2 * m, cellH = h + 2 * m;
-        const cols = Math.max(1, Math.floor((s.sheetW - s.insetRight) / cellW));
-        const rows = Math.max(1, Math.floor((s.sheetH - s.insetBottom) / cellH));
+        const gap = s.instanceGap;
+        const cellW = w + gap, cellH = h + gap;
+        const cols = Math.max(1, Math.floor((s.sheetW - s.insetRight + gap) / cellW));
+        const rows = Math.max(1, Math.floor((s.sheetH - s.insetBottom + gap) / cellH));
         const count = Math.max(1, Math.min(Math.round(num('copies', 1)), cols * rows));
         const frame = $('trimFrame').checked;
         const outer = frame ? m : 0;
@@ -1585,7 +1591,7 @@
         // высота макета сбрасываются отдельно — к натуральному размеру
         // текущего загруженного SVG (state.designWidth/designHeight).
         const initial = {};
-        ['sheetWidth', 'sheetHeight', 'copies', 'rotation', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'resolution', 'baud'].forEach(id => initial[id] = $(id).value);
+        ['sheetWidth', 'sheetHeight', 'copies', 'instanceGap', 'rotation', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'resolution', 'baud'].forEach(id => initial[id] = $(id).value);
         ['mirror', 'trimFrame', 'showStart'].forEach(id => initial[id] = $(id).checked);
         $('resetBtn').addEventListener('click', () => {
           $('designWidth').value = state.designWidth;
@@ -1627,7 +1633,7 @@
           syncDesignSize('designWidth');
           renderPreview();
         });
-        ['sheetWidth', 'sheetHeight', 'copies', 'mirror', 'trimFrame', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
+        ['sheetWidth', 'sheetHeight', 'copies', 'instanceGap', 'mirror', 'trimFrame', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
         // Поворот: циклическая кнопка 0° → 90° → 180° → 270° → 0°.
         $('rotation').addEventListener('click', () => {
           $('rotation').value = (Number($('rotation').value) + 90) % 360;

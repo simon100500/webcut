@@ -870,10 +870,9 @@
             </button>
           </div>
           <input id="mirror" type="checkbox" hidden />
-          <label class="check-row"><input id="fitToSheet" type="checkbox" /><span>Вписать в
-              область<em>Уменьшит макет, чтобы он уместился в лист</em></span></label>
-          <label class="check-row"><input id="trimFrame" type="checkbox" /><span>Обрезать рамкой<em>Прямоугольник вокруг
-                фигуры — рез в самом конце</em></span></label>
+          <div class="field"><button id="fitWidthBtn" class="outline rotation-btn" type="button"
+              title="Растянуть макет на всю ширину листа (с учётом отступа справа)">По ширине листа</button></div>
+          <label class="check-row"><input id="trimFrame" type="checkbox" /><span>Обрезать рамкой</span></label>
           <div class="field" id="trimMarginField" hidden style="margin-top: 11px"><label for="trimMargin">Отступ рамки,
               мм</label><input id="trimMargin" type="number" value="5" min="0" max="200" step="0.5" /></div>
           <div class="grid2">
@@ -882,6 +881,8 @@
             <div class="field"><label for="insetBottom">Отступ снизу, мм</label><input id="insetBottom" type="number"
                 value="0" min="0" max="2000" step="0.5" /></div>
           </div>
+          <div class="field"><label for="copies">Экземпляров</label><input id="copies" type="number" value="1"
+              min="1" max="2000" step="1" title="Заполнение листа: в строке справа налево, строки снизу вверх" /></div>
           <label class="check-row" style="margin-top: 12px"><input id="showStart" type="checkbox" checked /><span>Показывать
               точки старта<em>Зелёная — начало, оранжевая — overcut</em></span></label>
           <div class="button-row" style="margin-top: 14px"><button id="sendBtn" class="primary">Вырезать</button><button
@@ -1036,7 +1037,6 @@
           rotation: Number($('rotation').value),
           insetRight: Math.max(Math.max(0, num('insetRight', 0)), frameExtra),
           insetBottom: Math.max(Math.max(0, num('insetBottom', 0)), frameExtra),
-          fit: $('fitToSheet').checked,
           resolution: num('resolution', 40),
           knifeOffset: Math.max(0, num('knifeOffset', .52)),
           overcut: Math.max(0, num('overcut', 1)),
@@ -1048,16 +1048,14 @@
 
       // ============================================================
       // Размещение контуров. Резка всегда идёт от текущей точки каретки,
-      // поэтому геометрия не центрируется: применяются только масштаб,
-      // вписывание в лист и ориентация станка.
+      // поэтому геометрия не центрируется: применяется только масштаб,
+      // далее ориентация станка.
       // ============================================================
       function transformedContours() {
         const s = currentSettings();
-        const rawW = state.designWidth * s.scale, rawH = state.designHeight * s.scale;
-        const fit = s.fit ? Math.min(Math.max(.01, s.sheetW - 20 - s.insetRight) / Math.max(rawW, .001), Math.max(.01, s.sheetH - 20 - s.insetBottom) / Math.max(rawH, .001), 1) : 1;
         return state.contours.map(contour => ({
           ...contour,
-          points: normalizeContour(contour).points.map(p => [p[0] * s.scale * fit, p[1] * s.scale * fit])
+          points: normalizeContour(contour).points.map(p => [p[0] * s.scale, p[1] * s.scale])
         }));
       }
 
@@ -1291,32 +1289,53 @@
       }
 
       // ============================================================
-      // Контуры реза: фигура с компенсацией ножа плюс, при включённой
-      // «Обрезать рамкой», прямоугольник вокруг габарита фигуры с отступом.
-      // Рамка добавляется последней — это финальный рез, отделяющий лишний
-      // материал вокруг фигуры.
+      // Контуры реза: экземпляры фигуры заполняют лист — в строке справа
+      // налево, строки укладываются снизу вверх от опорного угла (каретки).
+      // Ячейка экземпляра включает отступ рамки со всех сторон, поэтому
+      // рамки соседей не пересекаются; при включённой рамке каждая копия
+      // обводится своей рамкой (последний контур ячейки). Рамки в опорный
+      // габарит НЕ входят: фигуры стоят по отступам от краёв листа, как и
+      // без рамки.
       // ============================================================
       function contoursForCut() {
+        const s = currentSettings();
         const placed = transformedContours();
-        const list = placed.map(withOvercut);
-        if ($('trimFrame').checked) {
-          const m = Math.max(0, num('trimMargin', 5));
-          let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-          for (const c of placed) for (const [x, y] of c.points) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
-          if (Number.isFinite(x0)) list.push(withOvercut({ points: [[x0 - m, y0 - m], [x1 + m, y0 - m], [x1 + m, y1 + m], [x0 - m, y1 + m]], closed: true }));
+        const list = [];
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const c of placed) for (const [x, y] of c.points) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
+        if (!Number.isFinite(x0)) return { list, ref: { points: [[0, 0]], closed: true } };
+        const w = Math.max(x1 - x0, .001), h = Math.max(y1 - y0, .001);
+        const m = Math.max(0, num('trimMargin', 5));
+        const cellW = w + 2 * m, cellH = h + 2 * m;
+        const cols = Math.max(1, Math.floor((s.sheetW - s.insetRight) / cellW));
+        const rows = Math.max(1, Math.floor((s.sheetH - s.insetBottom) / cellH));
+        const count = Math.max(1, Math.min(Math.round(num('copies', 1)), cols * rows));
+        const frame = $('trimFrame').checked;
+        const outer = frame ? m : 0;
+        const usedCols = Math.min(count, cols), usedRows = Math.ceil(count / cols);
+        const ref = {
+          points: [[-(usedCols - 1) * cellW - outer, -(usedRows - 1) * cellH - outer], [w + outer, -(usedRows - 1) * cellH - outer], [w + outer, h + outer], [-(usedCols - 1) * cellW - outer, h + outer]],
+          closed: true
+        };
+        for (let i = 0; i < count; i++) {
+          const tx = -(i % cols) * cellW, ty = -Math.floor(i / cols) * cellH;
+          const move = ([x, y]) => [x - x0 + tx, y - y0 + ty];
+          for (const c of placed) list.push(withOvercut({ ...c, points: c.points.map(move) }));
+          if (frame) list.push(withOvercut({ points: [[-m, -m], [w + m, -m], [w + m, h + m], [-m, h + m]].map(move), closed: true }));
         }
-        return { placed, list };
+        return { list, ref };
       }
 
       // ============================================================
       // Генерация команд и их просмотр в журнале.
       // ============================================================
       function pointsForCommands() {
-        const { placed, list } = contoursForCut();
+        const { list, ref } = contoursForCut();
         // Посадочная ориентация с компенсацией зеркала станка: при 0° рез
         // ложится так, как показывает превью — без зеркала и с верным поворотом.
         // machineOrient сюда НЕ применяется — станок сам даёт свои 90°.
-        return machinePlace(list, placed, parseCutOrientation());
+        // Опорный прямоугольник — габарит всей сетки экземпляров.
+        return machinePlace(list, [ref], parseCutOrientation());
       }
       function createCommands() { return hpgl(pointsForCommands()); }
       function showCommands() {
@@ -1385,20 +1404,22 @@
         // Поле отступа рамки видно только при включённой рамке.
         $('trimMarginField').hidden = !$('trimFrame').checked;
         const transformed = transformedContours();
-        const previewContours = contoursForCut().list;
+        const { list: previewContours, ref: gridRef } = contoursForCut();
         // Превью и рез используют одно и то же преобразование machinePlace:
-        // картинка на листе — ровно то, что уйдёт в команды.
-        const placedOriginal = machinePlace(transformed, transformed);
-        const placedCut = machinePlace(previewContours, transformed);
+        // картинка на листе — ровно то, что уйдёт в команды. Опора — габарит
+        // всей сетки экземпляров.
+        const placedGrid = machinePlace([gridRef], [gridRef]);
+        const placedCut = machinePlace(previewContours, [gridRef]);
+        const placedFigure = machinePlace(transformed, [gridRef]);
         // Заказной поворот превью: показываем макет так, как он физически
         // ляжет на материал с учётом фиксированного поворота станка.
         // Команды реза при этом не меняются (см. pointsForCommands).
-        const originalDisplay = machineOrient(placedOriginal, placedOriginal);
-        const cutDisplay = machineOrient(placedCut, placedOriginal);
+        const originalDisplay = machineOrient(placedFigure, placedGrid);
+        const cutDisplay = machineOrient(placedCut, placedGrid);
         // Лист на холсте — портретно (как в программе: X — ширина, Y — подача).
-        // Ориентация макета задаётся настройкой «Поворот»: 0° — горизонтально,
-        // 90° — вертикально.
-        const previewScale = Math.min(876 / Math.max(s.sheetW, .001), 610 / Math.max(s.sheetH, .001));
+        // Вписан по ШИРИНЕ холста: по 3 клетки (3 см) зазора слева и справа.
+        // По высоте лист может уходить за верхний край — вид привязан к низу.
+        const previewScale = 1000 / Math.max(s.sheetW + 60, .001);
         const previewW = s.sheetW * previewScale, previewH = s.sheetH * previewScale;
         // Лист прижат к низу viewBox: 30 единиц под ним — запас, чтобы нижняя
         // кромка с подписью всегда была видна; всё свободное место уходит вверх.
@@ -1563,8 +1584,8 @@
         // высота макета сбрасываются отдельно — к натуральному размеру
         // текущего загруженного SVG (state.designWidth/designHeight).
         const initial = {};
-        ['sheetWidth', 'sheetHeight', 'rotation', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'resolution', 'baud'].forEach(id => initial[id] = $(id).value);
-        ['mirror', 'fitToSheet', 'trimFrame', 'showStart'].forEach(id => initial[id] = $(id).checked);
+        ['sheetWidth', 'sheetHeight', 'copies', 'rotation', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'resolution', 'baud'].forEach(id => initial[id] = $(id).value);
+        ['mirror', 'trimFrame', 'showStart'].forEach(id => initial[id] = $(id).checked);
         $('resetBtn').addEventListener('click', () => {
           $('designWidth').value = state.designWidth;
           $('designHeight').value = state.designHeight;
@@ -1597,7 +1618,15 @@
         };
         $('designWidth').addEventListener('input', () => { syncDesignSize('designWidth'); renderPreview(); });
         $('designHeight').addEventListener('input', () => { syncDesignSize('designHeight'); renderPreview(); });
-        ['sheetWidth', 'sheetHeight', 'mirror', 'fitToSheet', 'trimFrame', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
+        // «По ширине листа»: макет на всю доступную ширину (лист минус
+        // отступ справа), высота — пропорционально.
+        $('fitWidthBtn').addEventListener('click', () => {
+          const st = currentSettings();
+          $('designWidth').value = fmt(Math.max(.1, st.sheetW - st.insetRight));
+          syncDesignSize('designWidth');
+          renderPreview();
+        });
+        ['sheetWidth', 'sheetHeight', 'copies', 'mirror', 'trimFrame', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
         // Поворот: циклическая кнопка 0° → 90° → 180° → 270° → 0°.
         $('rotation').addEventListener('click', () => {
           $('rotation').value = (Number($('rotation').value) + 90) % 360;

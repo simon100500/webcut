@@ -1067,23 +1067,17 @@
       }
 
       // ============================================================
-      // Ориентация на станке и привязка контура к правому нижнему углу
-      // листа с отступами insetRight/insetBottom (угол листа — точка
-      // старта каретки). Собирается из настроек «Поворот» и «Зеркало» и
-      // применяется ОДИНАКОВО для превью и для команд реза: что на холсте —
-      // то и режем.
+      // Фиксированная ориентация станка (посадка 0° с компенсацией
+      // зеркала станка) и привязка сетки к правому нижнему углу листа
+      // с отступами insetRight/insetBottom (угол листа — точка старта
+      // каретки). Применяется ОДИНАКОВО для превью и для команд реза:
+      // что на холсте — то и режем.
       // ============================================================
       function parseOrientation() {
-        const rot = Number($('rotation').value);
-        const mirror = $('mirror').checked;
-        const base = {
-          // 0° — штатное положение: макет горизонтально (как раньше 270°).
-          0:    { swap: true,  flipX: true,  flipY: false },
-          90:   { swap: false, flipX: false, flipY: false },
-          180:  { swap: true,  flipX: false, flipY: true  },
-          270:  { swap: false, flipX: true,  flipY: true  }
-        }[rot] || { swap: false, flipX: false, flipY: false };
-        return { swap: base.swap, flipX: mirror ? !base.flipX : base.flipX, flipY: base.flipY };
+        // Фиксированная посадка 0°: макет горизонтально. Поворот и зеркало
+        // применяются к каждому экземпляру внутри ячейки (см. contoursForCut),
+        // а не ко всей сетке.
+        return { swap: true, flipX: true, flipY: false };
       }
 
       // referenceContours — контуры без компенсации ножа: по ним считается
@@ -1312,30 +1306,47 @@
         for (const c of placed) for (const [x, y] of c.points) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
         if (!Number.isFinite(x0)) return { list, ref: { points: [[0, 0]], closed: true } };
         const w = Math.max(x1 - x0, .001), h = Math.max(y1 - y0, .001);
+        // Поворот и зеркало применяются к КАЖДОМУ экземпляру внутри его
+        // ячейки. После поворота на 90/270 габарит экземпляра rw×rh —
+        // повёрнутый (стороны поменяны местами).
+        const rot = ((Math.round(Number($('rotation').value)) % 360) + 360) % 360;
+        const mirror = $('mirror').checked;
+        const swapDims = rot === 90 || rot === 270;
+        const rw = swapDims ? h : w, rh = swapDims ? w : h;
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        // Один повёрнутый/отражённый экземпляр в локальных координатах ячейки.
+        const figure = placed.map(c => ({ ...c, points: c.points.map(([x, y]) => {
+          let px = x - cx, py = y - cy;
+          if (rot === 90) { const t = px; px = -py; py = t; }
+          else if (rot === 180) { px = -px; py = -py; }
+          else if (rot === 270) { const t = px; px = py; py = -t; }
+          if (mirror) px = -px;
+          return [px + rw / 2, py + rh / 2];
+        }) }));
         const m = Math.max(0, num('trimMargin', 5));
         const gap = s.instanceGap;
         const frame = $('trimFrame').checked;
         const outer = frame ? m : 0; // рамка выступает на m с каждой стороны фигуры
         // «Между экземплярами» — зазор между РАМКАМИ соседних копий, если
         // рамка включена, иначе — между самими фигурами.
-        const cellW = w + 2 * outer + gap, cellH = h + 2 * outer + gap;
+        const cellW = rw + 2 * outer + gap, cellH = rh + 2 * outer + gap;
         // Вместимость: габарит сетки вместе с крайними рамками должен
         // уместиться в лист с учётом отступов справа/снизу.
-        const cols = Math.max(1, Math.floor((s.sheetW - s.insetRight - w - 2 * outer - gap) / cellW) + 1);
-        const rows = Math.max(1, Math.floor((s.sheetH - s.insetBottom - h - 2 * outer - gap) / cellH) + 1);
+        const cols = Math.max(1, Math.floor((s.sheetW - s.insetRight - rw - 2 * outer - gap) / cellW) + 1);
+        const rows = Math.max(1, Math.floor((s.sheetH - s.insetBottom - rh - 2 * outer - gap) / cellH) + 1);
         const count = Math.max(1, Math.min(Math.round(num('copies', 1)), cols * rows));
         const usedCols = Math.min(count, cols), usedRows = Math.ceil(count / cols);
         const ref = {
-          points: [[-(usedCols - 1) * cellW - outer, -(usedRows - 1) * cellH - outer], [w + outer, -(usedRows - 1) * cellH - outer], [w + outer, h + outer], [-(usedCols - 1) * cellW - outer, h + outer]],
+          points: [[-(usedCols - 1) * cellW - outer, -(usedRows - 1) * cellH - outer], [rw + outer, -(usedRows - 1) * cellH - outer], [rw + outer, rh + outer], [-(usedCols - 1) * cellW - outer, rh + outer]],
           closed: true
         };
         for (let i = 0; i < count; i++) {
           const tx = -(i % cols) * cellW, ty = -Math.floor(i / cols) * cellH;
-          const move = ([x, y]) => [x - x0 + tx, y - y0 + ty];
-          for (const c of placed) list.push(withOvercut({ ...c, points: c.points.map(move) }));
-          if (frame) list.push(withOvercut({ points: [[-m, -m], [w + m, -m], [w + m, h + m], [-m, h + m]].map(move), closed: true }));
+          const shift = ([x, y]) => [x + tx, y + ty];
+          for (const c of figure) list.push(withOvercut({ ...c, points: c.points.map(shift) }));
+          if (frame) list.push(withOvercut({ points: [[-m, -m], [rw + m, -m], [rw + m, rh + m], [-m, rh + m]].map(shift), closed: true }));
         }
-        return { list, ref };
+        return { list, ref, figure };
       }
 
       // ============================================================
@@ -1418,13 +1429,13 @@
         $('trimMarginField').hidden = !$('trimFrame').checked;
         $('instanceGapField').hidden = num('copies', 1) <= 1;
         const transformed = transformedContours();
-        const { list: previewContours, ref: gridRef } = contoursForCut();
+        const { list: previewContours, ref: gridRef, figure } = contoursForCut();
         // Превью и рез используют одно и то же преобразование machinePlace:
         // картинка на листе — ровно то, что уйдёт в команды. Опора — габарит
         // всей сетки экземпляров.
         const placedGrid = machinePlace([gridRef], [gridRef]);
         const placedCut = machinePlace(previewContours, [gridRef]);
-        const placedFigure = machinePlace(transformed, [gridRef]);
+        const placedFigure = machinePlace(figure, [gridRef]);
         // Заказной поворот превью: показываем макет так, как он физически
         // ляжет на материал с учётом фиксированного поворота станка.
         // Команды реза при этом не меняются (см. pointsForCommands).

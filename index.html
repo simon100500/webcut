@@ -324,21 +324,55 @@
       width: 100%;
     }
 
-    .spoiler summary {
-      display: block;
-      color: #62788f;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      user-select: none;
+    .rotation-btn.active {
+      color: #fff;
+      background: var(--blue);
+      border-color: var(--blue);
+      box-shadow: 0 5px 12px rgba(23, 105, 208, .2);
     }
 
-    .spoiler summary:hover {
+    .spoiler {
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fbfdff;
+    }
+
+    .spoiler summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
       color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+    }
+
+    .spoiler summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .spoiler summary::after {
+      content: '';
+      flex: none;
+      width: 7px;
+      height: 7px;
+      border-right: 2px solid var(--muted);
+      border-bottom: 2px solid var(--muted);
+      transform: rotate(-45deg);
+      transition: transform .15s;
     }
 
     .spoiler[open] summary {
       margin-bottom: 10px;
+    }
+
+    .spoiler[open] summary::after {
+      transform: rotate(45deg);
     }
 
     .spoiler .grid2 {
@@ -534,10 +568,22 @@
       border-color: var(--line-strong);
     }
 
-    .stop {
-      color: #aa3333;
-      background: #fff5f3;
-      border-color: #f2ceca;
+    .danger {
+      color: #fff;
+      background: var(--red);
+      border-color: var(--red);
+    }
+
+    .danger:hover {
+      background: #b03f3f;
+    }
+
+    .icon-btn {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      padding: 0;
+      flex: none;
     }
 
     .log {
@@ -805,33 +851,48 @@
             <div class="field"><label for="designHeight">Высота макета, мм</label><input id="designHeight" type="number"
                 value="30" min="0.1" max="2000" step="0.1" /></div>
           </div>
-          <div class="field"><label for="rotation">Поворот</label><button id="rotation" class="outline rotation-btn"
-              type="button" value="0">
+          <div class="grid2">
+            <button id="rotation" class="outline rotation-btn" type="button" value="0" title="Поворот">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                 <path d="M3 3v5h5" />
               </svg><span id="rotationValue">0°</span>
-            </button></div>
-          <label class="check-row"><input id="mirror" type="checkbox" /><span>Зеркало<em>Отражение по
-                горизонтали</em></span></label>
+            </button>
+            <button id="mirrorBtn" class="outline rotation-btn" type="button"
+              title="Зеркало — отражение по горизонтали">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3" />
+                <path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3" />
+                <path d="M12 20v2" /><path d="M12 14v2" /><path d="M12 8v2" /><path d="M12 2v2" />
+              </svg><span>Зеркало</span>
+            </button>
+          </div>
+          <input id="mirror" type="checkbox" hidden />
           <label class="check-row"><input id="fitToSheet" type="checkbox" /><span>Вписать в
               область<em>Уменьшит макет, чтобы он уместился в лист</em></span></label>
           <label class="check-row"><input id="trimFrame" type="checkbox" /><span>Обрезать рамкой<em>Прямоугольник вокруг
                 фигуры — рез в самом конце</em></span></label>
-          <div class="field" style="margin-top: 11px"><label for="trimMargin">Отступ рамки, мм</label><input
-              id="trimMargin" type="number" value="5" min="0" max="200" step="0.5" /></div>
+          <div class="field" id="trimMarginField" hidden style="margin-top: 11px"><label for="trimMargin">Отступ рамки,
+              мм</label><input id="trimMargin" type="number" value="5" min="0" max="200" step="0.5" /></div>
           <div class="grid2">
             <div class="field"><label for="insetRight">Отступ справа, мм</label><input id="insetRight" type="number"
                 value="0" min="0" max="2000" step="0.5" /></div>
             <div class="field"><label for="insetBottom">Отступ снизу, мм</label><input id="insetBottom" type="number"
                 value="0" min="0" max="2000" step="0.5" /></div>
           </div>
-          <button id="resetBtn" class="outline" style="width: 100%; margin-top: 12px">Сбросить настройки</button>
           <label class="check-row" style="margin-top: 12px"><input id="showStart" type="checkbox" checked /><span>Показывать
               точки старта<em>Зелёная — начало, оранжевая — overcut</em></span></label>
-          <div class="button-row" style="margin-top: 14px"><button id="sendBtn" class="primary">Отправить
-              траекторию</button><button id="stopBtn" class="stop">Стоп</button></div>
+          <div class="button-row" style="margin-top: 14px"><button id="sendBtn" class="primary">Вырезать</button><button
+              id="resetBtn" class="danger icon-btn" type="button"
+              title="Сбросить настройки к значениям по умолчанию">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 14 4 9l5-5" />
+                <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11" />
+              </svg>
+            </button></div>
         </section>
       </aside>
       <section class="card canvas-card">
@@ -1321,6 +1382,8 @@
 
       function renderPreview() {
         const s = currentSettings();
+        // Поле отступа рамки видно только при включённой рамке.
+        $('trimMarginField').hidden = !$('trimFrame').checked;
         const transformed = transformedContours();
         const previewContours = contoursForCut().list;
         // Превью и рез используют одно и то же преобразование machinePlace:
@@ -1403,6 +1466,7 @@
         lbl('sheetLabelRight', previewX + previewW + 8, midY, hTxt, 90);
         const degree = $('rotation').value;
         $('rotationValue').textContent = `${degree}°`;
+        $('mirrorBtn').classList.toggle('active', $('mirror').checked);
         const mirrorTxt = $('mirror').checked ? ' · зеркало' : '';
         $('coordinateCaption').textContent = `Рез: ${degree}°${mirrorTxt} · каретка — правый нижний угол листа`;
         const allSegments = state.contours.reduce((sum, c) => sum + Math.max(0, c.points.length - 1) + (c.closed ? 1 : 0), 0);
@@ -1446,7 +1510,7 @@
         const btn = $('sendBtn');
         btn.disabled = true;
         const oldLabel = btn.textContent;
-        btn.textContent = 'Отправка…';
+        btn.textContent = 'Вырезаю…';
         try {
           await state.writer.write(new TextEncoder().encode(`${state.commandText}\r\n`));
           log(`Отправлено: ${state.commandText.split('\n').length} строк, ${state.contours.length} контур(а).`);
@@ -1457,14 +1521,6 @@
           btn.disabled = false;
           btn.textContent = oldLabel;
         }
-      }
-
-      async function stopPlotter() {
-        if (!state.writer) { log('Порт не подключён.'); return; }
-        try {
-          await state.writer.write(new TextEncoder().encode('!\r\n'));
-          log('Команда остановки отправлена.');
-        } catch (error) { log(`Не удалось отправить стоп: ${error.message}`); }
       }
 
       // ============================================================
@@ -1503,12 +1559,15 @@
         $('designWidth').value = state.designWidth;
         $('designHeight').value = state.designHeight;
         // Снимок значений по умолчанию: кнопка «Сбросить настройки» возвращает
-        // все поля (лист, макет — к натуральной величине, нож, рамку, отступы,
-        // Baud) к этому состоянию.
+        // поля (лист, нож, рамку, отступы, Baud) к этому состоянию. Ширина и
+        // высота макета сбрасываются отдельно — к натуральному размеру
+        // текущего загруженного SVG (state.designWidth/designHeight).
         const initial = {};
-        ['sheetWidth', 'sheetHeight', 'designWidth', 'designHeight', 'rotation', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'resolution', 'baud'].forEach(id => initial[id] = $(id).value);
+        ['sheetWidth', 'sheetHeight', 'rotation', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'resolution', 'baud'].forEach(id => initial[id] = $(id).value);
         ['mirror', 'fitToSheet', 'trimFrame', 'showStart'].forEach(id => initial[id] = $(id).checked);
         $('resetBtn').addEventListener('click', () => {
+          $('designWidth').value = state.designWidth;
+          $('designHeight').value = state.designHeight;
           Object.entries(initial).forEach(([id, v]) => { const el = $(id); if (typeof v === 'boolean') el.checked = v; else el.value = v; });
           renderPreview();
           log('Настройки сброшены к значениям по умолчанию.');
@@ -1519,7 +1578,6 @@
         $('dropZone').addEventListener('drop', event => { event.preventDefault(); $('dropZone').classList.remove('dragover'); importSvg(event.dataTransfer.files[0]); });
         $('connectBtn').addEventListener('click', connectSerial);
         $('sendBtn').addEventListener('click', sendCommands);
-        $('stopBtn').addEventListener('click', stopPlotter);
         $('previewBtn').addEventListener('click', showCommands);
         // Модалка настроек: открытие из шапки, закрытие по кнопке, фону и Esc.
         const modal = $('settingsModal');
@@ -1543,6 +1601,12 @@
         // Поворот: циклическая кнопка 0° → 90° → 180° → 270° → 0°.
         $('rotation').addEventListener('click', () => {
           $('rotation').value = (Number($('rotation').value) + 90) % 360;
+          renderPreview();
+        });
+        // Зеркало: кнопка-переключатель над скрытым чекбоксом.
+        $('mirrorBtn').addEventListener('click', () => {
+          const mirror = $('mirror');
+          mirror.checked = !mirror.checked;
           renderPreview();
         });
 

@@ -811,24 +811,21 @@
                 value="297" min="10" max="2000" step="1" /></div>
           </div>
           <div class="grid2">
-            <div class="field"><label for="scale">Масштаб</label><input id="scale" type="number" value="1" min="0.01"
-                max="100" step="0.01" /></div>
-            <div class="field"><label for="rotation">Поворот</label><select id="rotation">
-                <option value="0" selected>0°</option>
-                <option value="90">90°</option>
-                <option value="180">180°</option>
-                <option value="270">270°</option>
-              </select></div>
+            <div class="field"><label for="designWidth">Ширина макета, мм</label><input id="designWidth" type="number"
+                value="20" min="0.1" max="2000" step="0.1" /></div>
+            <div class="field"><label for="designHeight">Высота макета, мм</label><input id="designHeight" type="number"
+                value="30" min="0.1" max="2000" step="0.1" /></div>
           </div>
+          <div class="field"><label for="rotation">Поворот</label><select id="rotation">
+              <option value="0" selected>0°</option>
+              <option value="90">90°</option>
+              <option value="180">180°</option>
+              <option value="270">270°</option>
+            </select></div>
           <label class="check-row"><input id="mirror" type="checkbox" /><span>Зеркало<em>Отражение по
                 горизонтали</em></span></label>
-          <div class="field"><label for="origin">Начало координат</label><select id="origin">
-              <option value="current" selected>Текущая точка плоттера</option>
-              <option value="top-left">Левый верхний угол</option>
-              <option value="bottom-left">Левый нижний угол</option>
-              <option value="center">Центр листа</option>
-            </select></div><label class="check-row"><input id="fitToSheet" type="checkbox" /><span>Вписать в
-              область<em>Для абсолютного нуля листа</em></span></label>
+          <label class="check-row"><input id="fitToSheet" type="checkbox" /><span>Вписать в
+              область<em>Уменьшит макет, чтобы он уместился в лист</em></span></label>
         </section>
       </aside>
       <section class="card canvas-card">
@@ -967,10 +964,10 @@
         return {
           sheetW: num('sheetWidth', 210),
           sheetH: num('sheetHeight', 297),
-          scale: num('scale', 1),
+          // Масштаб — производная поля «Ширина макета»; поле «Высота» держит
+          // пропорцию и в расчёте не участвует.
+          scale: clamp(num('designWidth', state.designWidth) / Math.max(state.designWidth, .001), .01, 100),
           rotation: Number($('rotation').value),
-          origin: $('origin').value,
-          current: $('origin').value === 'current',
           fit: $('fitToSheet').checked,
           resolution: num('resolution', 40),
           knifeOffset: Math.max(0, num('knifeOffset', .52)),
@@ -982,19 +979,17 @@
       }
 
       // ============================================================
-      // Размещение контуров на листе. В режиме «текущая точка» геометрия
-      // не центрируется и не вписывается — резка идёт от каретки.
+      // Размещение контуров. Резка всегда идёт от текущей точки каретки,
+      // поэтому геометрия не центрируется: применяются только масштаб,
+      // вписывание в лист и ориентация станка.
       // ============================================================
       function transformedContours() {
         const s = currentSettings();
         const rawW = state.designWidth * s.scale, rawH = state.designHeight * s.scale;
         const fit = s.fit ? Math.min((s.sheetW - 20) / Math.max(rawW, .001), (s.sheetH - 20) / Math.max(rawH, .001), 1) : 1;
-        const placedW = rawW * fit, placedH = rawH * fit;
-        const left = s.current ? 0 : (s.sheetW - placedW) / 2;
-        const top = s.current ? 0 : (s.sheetH - placedH) / 2;
         return state.contours.map(contour => ({
           ...contour,
-          points: normalizeContour(contour).points.map(p => [p[0] * s.scale * fit + left, p[1] * s.scale * fit + top])
+          points: normalizeContour(contour).points.map(p => [p[0] * s.scale * fit, p[1] * s.scale * fit])
         }));
       }
 
@@ -1193,39 +1188,28 @@
       }
 
       // ============================================================
-      // HPGL. Режим «текущая точка» → относительный PR (старт с каретки).
+      // HPGL. Рез всегда стартует от текущей точки каретки — относительный
+      // режим PR, ноль отсчёта в первой точке первого контура.
       // ============================================================
       function hpgl(contours) {
         const s = currentSettings();
         const lines = ['IN;', 'SP1;'];
-        if (s.current) {
-          const deviceContours = contours
-            .map(c => dedupeDevicePoints(c.points.map(p => toDevicePoint(p, s))))
-            .filter(points => points.length);
-          if (!deviceContours.length) { lines.push('PA;', 'SP0;'); return lines.join('\n'); }
-          const first = deviceContours[0][0];
-          let cursor = [0, 0];
-          lines.push('PR;');
-          deviceContours.forEach(points => {
-            const local = points.map(p => [p[0] - first[0], p[1] - first[1]]);
-            const startDelta = [local[0][0] - cursor[0], local[0][1] - cursor[1]];
-            if (startDelta[0] || startDelta[1]) lines.push(`PU${startDelta[0]},${startDelta[1]};`);
-            const deltas = local.slice(1).map((p, i) => [p[0] - local[i][0], p[1] - local[i][1]]);
-            if (deltas.length) lines.push(`PD${deltas.map(d => d.join(',')).join(',')};`);
-            lines.push('PU1,0;');
-            cursor = [local[local.length - 1][0] + 1, local[local.length - 1][1]];
-          });
-        } else {
-          lines.push('PA;');
-          contours.forEach(contour => {
-            const points = dedupeDevicePoints(contour.points.map(p => toDevicePoint(p, s)));
-            if (!points.length) return;
-            lines.push(`PU${points[0][0]},${points[0][1]};`);
-            if (points.length > 1) lines.push(`PD${points.slice(1).map(p => p.join(',')).join(',')};`);
-            const last = points[points.length - 1];
-            lines.push(`PU${last[0] + 1},${last[1]};`);
-          });
-        }
+        const deviceContours = contours
+          .map(c => dedupeDevicePoints(c.points.map(p => toDevicePoint(p, s))))
+          .filter(points => points.length);
+        if (!deviceContours.length) { lines.push('PA;', 'SP0;'); return lines.join('\n'); }
+        const first = deviceContours[0][0];
+        let cursor = [0, 0];
+        lines.push('PR;');
+        deviceContours.forEach(points => {
+          const local = points.map(p => [p[0] - first[0], p[1] - first[1]]);
+          const startDelta = [local[0][0] - cursor[0], local[0][1] - cursor[1]];
+          if (startDelta[0] || startDelta[1]) lines.push(`PU${startDelta[0]},${startDelta[1]};`);
+          const deltas = local.slice(1).map((p, i) => [p[0] - local[i][0], p[1] - local[i][1]]);
+          if (deltas.length) lines.push(`PD${deltas.map(d => d.join(',')).join(',')};`);
+          lines.push('PU1,0;');
+          cursor = [local[local.length - 1][0] + 1, local[local.length - 1][1]];
+        });
         lines.push('PA;', 'SP0;');
         return lines.join('\n');
       }
@@ -1422,6 +1406,8 @@
             state.originalContours = imported.contours;
             state.designWidth = imported.width;
             state.designHeight = imported.height;
+            $('designWidth').value = fmt(imported.width);
+            $('designHeight').value = fmt(imported.height);
             state.fileName = file.name;
             $('fileName').textContent = file.name;
             $('fileCaption').textContent = `SVG загружен · ${state.contours.length} контур(а) · готово к подготовке траектории`;
@@ -1441,6 +1427,8 @@
         // Встроенный тестовый контур разбирается тем же парсером, что и импорт SVG.
         state.contours = parsePathList(TEST_R_PATH, Math.max(.02, num('tolerance', .15)));
         $('fileName').textContent = state.fileName;
+        $('designWidth').value = state.designWidth;
+        $('designHeight').value = state.designHeight;
         $('fileCaption').textContent = 'Встроенный тест «буква R» 20 × 30 мм · старт от текущей точки каретки';
         $('fileInput').addEventListener('change', event => importSvg(event.target.files[0]));
         $('dropZone').addEventListener('dragover', event => { event.preventDefault(); $('dropZone').classList.add('dragover'); });
@@ -1450,7 +1438,19 @@
         $('sendBtn').addEventListener('click', sendCommands);
         $('stopBtn').addEventListener('click', stopPlotter);
         $('previewBtn').addEventListener('click', showCommands);
-        ['sheetWidth', 'sheetHeight', 'scale', 'rotation', 'mirror', 'origin', 'fitToSheet', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
+        // Размер макета: поля ширины и высоты связаны пропорцией, масштаб
+        // вычисляется из ширины. Остальные настройки просто перерисовывают.
+        const syncDesignSize = changed => {
+          const nativeW = Math.max(state.designWidth, .001), nativeH = Math.max(state.designHeight, .001);
+          if (changed === 'designWidth') {
+            $('designHeight').value = fmt(nativeH * clamp(num('designWidth', nativeW) / nativeW, .01, 100));
+          } else {
+            $('designWidth').value = fmt(nativeW * clamp(num('designHeight', nativeH) / nativeH, .01, 100));
+          }
+        };
+        $('designWidth').addEventListener('input', () => { syncDesignSize('designWidth'); renderPreview(); });
+        $('designHeight').addEventListener('input', () => { syncDesignSize('designHeight'); renderPreview(); });
+        ['sheetWidth', 'sheetHeight', 'rotation', 'mirror', 'fitToSheet', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
 
         // Панорамирование и zoom холста.
         const canvas = $('canvasWrap'), preview = $('preview');

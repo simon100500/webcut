@@ -167,8 +167,7 @@
       place-items: center;
       padding: 28px;
       background-color: #f7fafd;
-      background-image: linear-gradient(#dbe5f0 1px, transparent 1px), linear-gradient(90deg, #dbe5f0 1px, transparent 1px);
-      background-size: 28px 28px;
+      user-select: none;
     }
 
     svg#preview {
@@ -183,6 +182,12 @@
       stroke: #adbed0;
       stroke-width: 1;
       filter: drop-shadow(0 6px 8px rgba(65, 99, 132, .12));
+    }
+
+    .grid-line {
+      fill: none;
+      stroke: #dbe5f0;
+      stroke-width: 1;
     }
 
     .cut {
@@ -209,6 +214,13 @@
       fill: var(--green);
       stroke: white;
       stroke-width: .5;
+    }
+
+    .start-cross {
+      stroke: var(--red);
+      stroke-width: 1;
+      fill: none;
+      vector-effect: non-scaling-stroke;
     }
 
     .dim {
@@ -826,6 +838,10 @@
                 горизонтали</em></span></label>
           <label class="check-row"><input id="fitToSheet" type="checkbox" /><span>Вписать в
               область<em>Уменьшит макет, чтобы он уместился в лист</em></span></label>
+          <label class="check-row"><input id="trimFrame" type="checkbox" /><span>Обрезать рамкой<em>Прямоугольник вокруг
+                фигуры — рез в самом конце</em></span></label>
+          <div class="field" style="margin-top: 11px"><label for="trimMargin">Отступ рамки, мм</label><input
+              id="trimMargin" type="number" value="5" min="0" max="200" step="0.5" /></div>
         </section>
       </aside>
       <section class="card canvas-card">
@@ -836,6 +852,11 @@
         </div>
         <div id="canvasWrap" class="canvas-wrap"><svg id="preview" viewBox="0 0 1000 700" role="img"
             aria-label="Предпросмотр резки SVG">
+            <defs>
+              <pattern id="gridPattern" patternUnits="userSpaceOnUse" width="28" height="28"><path id="gridPatternPath"
+                  class="grid-line" d="M 28 0 L 0 0 0 28" /></pattern>
+            </defs>
+            <rect id="previewGrid" x="-3000" y="-2000" width="7000" height="5000" fill="url(#gridPattern)" />
             <rect id="previewSheet" class="sheet" x="62" y="45" width="876" height="610" rx="2" />
             <g id="previewOriginal"></g>
             <g id="previewCut"></g>
@@ -1087,7 +1108,8 @@
       // ============================================================
       function offsetTip(tip, radius, tolerance, closed) {
         const pts = tip.filter((p, i, arr) => !i || dist(p, arr[i - 1]) > 1e-7);
-        if (pts.length < 2 || radius <= 1e-7) return pts;
+        // Без компенсации замкнутый контур всё равно должен замыкаться в командах.
+        if (pts.length < 2 || radius <= 1e-7) return closed && pts.length > 2 ? pts.concat([pts[0]]) : pts;
         const segCount = closed ? pts.length : pts.length - 1;
         const dirs = [], lens = [];
         for (let i = 0; i < segCount; i++) {
@@ -1188,8 +1210,10 @@
       }
 
       // ============================================================
-      // HPGL. Рез всегда стартует от текущей точки каретки — относительный
-      // режим PR, ноль отсчёта в первой точке первого контура.
+      // HPGL. Относительный режим PR: ноль отсчёта — текущее положение
+      // каретки, и фигура кладётся так, что с кареткой совпадает её правый
+      // нижний угол. Поэтому рез начинается с хода с поднятым ножом от
+      // каретки до точки входа первого контура — перо опускается уже там.
       // ============================================================
       function hpgl(contours) {
         const s = currentSettings();
@@ -1198,11 +1222,13 @@
           .map(c => dedupeDevicePoints(c.points.map(p => toDevicePoint(p, s))))
           .filter(points => points.length);
         if (!deviceContours.length) { lines.push('PA;', 'SP0;'); return lines.join('\n'); }
-        const first = deviceContours[0][0];
+        // machinePlace прижимает фигуру к правому нижнему углу листа, так что
+        // её угол в шагах устройства — это (sheetW, sheetH) · разрешение.
+        const origin = [Math.round(s.sheetW * s.resolution), Math.round(s.sheetH * s.resolution)];
         let cursor = [0, 0];
         lines.push('PR;');
         deviceContours.forEach(points => {
-          const local = points.map(p => [p[0] - first[0], p[1] - first[1]]);
+          const local = points.map(p => [p[0] - origin[0], p[1] - origin[1]]);
           const startDelta = [local[0][0] - cursor[0], local[0][1] - cursor[1]];
           if (startDelta[0] || startDelta[1]) lines.push(`PU${startDelta[0]},${startDelta[1]};`);
           const deltas = local.slice(1).map((p, i) => [p[0] - local[i][0], p[1] - local[i][1]]);
@@ -1215,14 +1241,32 @@
       }
 
       // ============================================================
+      // Контуры реза: фигура с компенсацией ножа плюс, при включённой
+      // «Обрезать рамкой», прямоугольник вокруг габарита фигуры с отступом.
+      // Рамка добавляется последней — это финальный рез, отделяющий лишний
+      // материал вокруг фигуры.
+      // ============================================================
+      function contoursForCut() {
+        const placed = transformedContours();
+        const list = placed.map(withOvercut);
+        if ($('trimFrame').checked) {
+          const m = Math.max(0, num('trimMargin', 5));
+          let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+          for (const c of placed) for (const [x, y] of c.points) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
+          if (Number.isFinite(x0)) list.push(withOvercut({ points: [[x0 - m, y0 - m], [x1 + m, y0 - m], [x1 + m, y1 + m], [x0 - m, y1 + m]], closed: true }));
+        }
+        return { placed, list };
+      }
+
+      // ============================================================
       // Генерация команд и их просмотр в журнале.
       // ============================================================
       function pointsForCommands() {
-        const placed = transformedContours();
+        const { placed, list } = contoursForCut();
         // Посадочная ориентация с компенсацией зеркала станка: при 0° рез
         // ложится так, как показывает превью — без зеркала и с верным поворотом.
         // machineOrient сюда НЕ применяется — станок сам даёт свои 90°.
-        return machinePlace(placed.map(withOvercut), placed, parseCutOrientation());
+        return machinePlace(list, placed, parseCutOrientation());
       }
       function createCommands() { return hpgl(pointsForCommands()); }
       function showCommands() {
@@ -1238,6 +1282,19 @@
         element.setAttribute('class', className);
         element.setAttribute('points', points.map(p => `${fmt(p[0])},${fmt(p[1])}`).join(' '));
         group.appendChild(element);
+      }
+
+      // Размерная линия с двумя стрелками и подписью (габариты заготовки).
+      // Красное перекрестие точки старта каретки (правый нижний угол фигуры).
+      function drawCrosshair(group, point, arm) {
+        const ns = 'http://www.w3.org/2000/svg';
+        [[point[0] - arm, point[1], point[0] + arm, point[1]], [point[0], point[1] - arm, point[0], point[1] + arm]].forEach(([x1, y1, x2, y2]) => {
+          const line = document.createElementNS(ns, 'line');
+          line.setAttribute('class', 'start-cross');
+          line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+          line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+          group.appendChild(line);
+        });
       }
 
       // Размерная линия с двумя стрелками и подписью (габариты заготовки).
@@ -1273,7 +1330,7 @@
       function renderPreview() {
         const s = currentSettings();
         const transformed = transformedContours();
-        const previewContours = transformed.map(withOvercut);
+        const previewContours = contoursForCut().list;
         // Превью и рез используют одно и то же преобразование machinePlace:
         // картинка на листе — ровно то, что уйдёт в команды.
         const placedOriginal = machinePlace(transformed, transformed);
@@ -1290,6 +1347,17 @@
         const previewW = s.sheetW * previewScale, previewH = s.sheetH * previewScale;
         const previewX = (1000 - previewW) / 2, previewY = (700 - previewH) / 2;
         const map = p => [previewX + p[0] * previewScale, previewY + p[1] * previewScale];
+        // Сетка рабочего стола: клетки 1 см, выровнены по правому нижнему
+        // углу листа. Сетка живёт внутри SVG, поэтому при панорамировании
+        // и зуме движется вместе с холстом, а не остаётся фоном окна.
+        const cell = 10 * previewScale;
+        const cornerX = previewX + previewW, cornerY = previewY + previewH;
+        const gridPattern = $('gridPattern');
+        gridPattern.setAttribute('width', cell);
+        gridPattern.setAttribute('height', cell);
+        gridPattern.setAttribute('x', cornerX % cell);
+        gridPattern.setAttribute('y', cornerY % cell);
+        $('gridPatternPath').setAttribute('d', `M ${cell} 0 L 0 0 0 ${cell}`);
         const sheet = $('previewSheet');
         sheet.setAttribute('x', previewX); sheet.setAttribute('y', previewY);
         sheet.setAttribute('width', previewW); sheet.setAttribute('height', previewH);
@@ -1323,12 +1391,14 @@
             drawDimension($('previewDims'), map([dx0 - gap, dy0]), map([dx0 - gap, dy1]), `${fmt(dy1 - dy0)} мм`, true);
           }
         }
+        // Точка старта каретки — правый нижний угол фигуры (совпадает с углом листа).
+        drawCrosshair($('previewDims'), map([s.sheetW, s.sheetH]), 12);
         $('sheetLabel').setAttribute('y', Math.min(688, previewY + previewH + 25));
         $('sheetLabel').textContent = `${fmt(s.sheetW)} × ${fmt(s.sheetH)} мм · ${previewContours.length} контур(а)`;
         $('previewMeta').textContent = `${previewContours.length} контур(а) · компенсация ${fmt(s.knifeOffset)} мм · overcut ${fmt(s.overcut)} мм`;
         const degree = $('rotation').value;
         const mirrorTxt = $('mirror').checked ? ' · зеркало' : '';
-        $('coordinateCaption').textContent = `Рез: ${degree}°${mirrorTxt} · размещение: правый нижний угол листа`;
+        $('coordinateCaption').textContent = `Рез: ${degree}°${mirrorTxt} · каретка стартует с правого нижнего угла фигуры`;
         const allSegments = state.contours.reduce((sum, c) => sum + Math.max(0, c.points.length - 1) + (c.closed ? 1 : 0), 0);
         $('pathCount').textContent = state.contours.length;
         $('segmentCount').textContent = allSegments;
@@ -1429,7 +1499,7 @@
         $('fileName').textContent = state.fileName;
         $('designWidth').value = state.designWidth;
         $('designHeight').value = state.designHeight;
-        $('fileCaption').textContent = 'Встроенный тест «буква R» 20 × 30 мм · старт от текущей точки каретки';
+        $('fileCaption').textContent = 'Встроенный тест «буква R» 20 × 30 мм · каретка стартует с правого нижнего угла фигуры';
         $('fileInput').addEventListener('change', event => importSvg(event.target.files[0]));
         $('dropZone').addEventListener('dragover', event => { event.preventDefault(); $('dropZone').classList.add('dragover'); });
         $('dropZone').addEventListener('dragleave', () => $('dropZone').classList.remove('dragover'));
@@ -1450,7 +1520,7 @@
         };
         $('designWidth').addEventListener('input', () => { syncDesignSize('designWidth'); renderPreview(); });
         $('designHeight').addEventListener('input', () => { syncDesignSize('designHeight'); renderPreview(); });
-        ['sheetWidth', 'sheetHeight', 'rotation', 'mirror', 'fitToSheet', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
+        ['sheetWidth', 'sheetHeight', 'rotation', 'mirror', 'fitToSheet', 'trimFrame', 'trimMargin', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
 
         // Панорамирование и zoom холста.
         const canvas = $('canvasWrap'), preview = $('preview');

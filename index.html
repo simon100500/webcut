@@ -1039,6 +1039,38 @@
       }
 
       // ============================================================
+      // Посадочная ориентация команд реза. Станок, кроме фиксированного
+      // поворота, даёт ещё и фиксированное зеркало, поэтому flipY инвертируется
+      // относительно ориентации превью. При 0° это даёт { swap, flipX, flipY } —
+      // ориентацию, выверенную на станке ещё в MACHINE_ORIENTATION.
+      // ============================================================
+      function parseCutOrientation() {
+        const o = parseOrientation();
+        return { swap: o.swap, flipX: o.flipX, flipY: !o.flipY };
+      }
+
+      // ============================================================
+      // Заказной поворот превью. Станок кладёт рез на материал с фиксированным
+      // поворотом на 90° против часовой, поэтому макет на превью показывается
+      // с этим же поворотом (поворот вокруг центра + прижим к нижнему краю
+      // листа по габариту referenceContours) — картинка совпадает с физическим
+      // результатом. К командам реза НЕ применяется: они уже в посадочной
+      // ориентации (parseCutOrientation в pointsForCommands).
+      // ============================================================
+      function machineOrient(contours, referenceContours) {
+        const s = currentSettings();
+        const all = referenceContours.flatMap(c => c.points);
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const [x, y] of all) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        const rot = ([x, y]) => [cx + (y - cy), cy - (x - cx)];
+        let rx1 = -Infinity, ry1 = -Infinity;
+        for (const [x, y] of all.map(rot)) { if (x > rx1) rx1 = x; if (y > ry1) ry1 = y; }
+        const dx = s.sheetW - rx1, dy = s.sheetH - ry1;
+        return contours.map(c => ({ ...c, points: c.points.map(p => { const [rx, ry] = rot(p); return [rx + dx, ry + dy]; }) }));
+      }
+
+      // ============================================================
       // Дуга поворота ножа в вершине. На почти прямых участках дуга не нужна:
       // нож плавно поворачивается сам, а лишние дуги создают точки и рывки.
       // ============================================================
@@ -1203,7 +1235,10 @@
       // ============================================================
       function pointsForCommands() {
         const placed = transformedContours();
-        return machinePlace(placed.map(withOvercut), placed);
+        // Посадочная ориентация с компенсацией зеркала станка: при 0° рез
+        // ложится так, как показывает превью — без зеркала и с верным поворотом.
+        // machineOrient сюда НЕ применяется — станок сам даёт свои 90°.
+        return machinePlace(placed.map(withOvercut), placed, parseCutOrientation());
       }
       function createCommands() { return hpgl(pointsForCommands()); }
       function showCommands() {
@@ -1259,25 +1294,11 @@
         // картинка на листе — ровно то, что уйдёт в команды.
         const placedOriginal = machinePlace(transformed, transformed);
         const placedCut = machinePlace(previewContours, transformed);
-        // WYSIWYG: показываем ровно ту геометрию, что уходит в рез.
-        const originalDisplay = placedOriginal;
-        const cutDisplay = placedCut;
-        // Лист в станке лежит вертикально, макет печатается вертикально (длинная
-        // ось по подаче вниз). Показываем макет вертикально у нижнего края листа,
-        // как он ляжет при печати. Рез при этом не меняется.
-        {
-          const allPts = originalDisplay.flatMap(c => c.points);
-          let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-          for (const [x, y] of allPts) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
-          const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-          const rot = pts => pts.map(([x, y]) => [cx + (y - cy), cy - (x - cx)]);
-          const r = rot(allPts);
-          let rx0 = Infinity, ry0 = Infinity, rx1 = -Infinity, ry1 = -Infinity;
-          for (const [x, y] of r) { if (x < rx0) rx0 = x; if (y < ry0) ry0 = y; if (x > rx1) rx1 = x; if (y > ry1) ry1 = y; }
-          const dx = s.sheetW - rx1, dy = s.sheetH - ry1;
-          const apply = c => { c.points = rot(c.points).map(([x, y]) => [x + dx, y + dy]); };
-          originalDisplay.forEach(apply); cutDisplay.forEach(apply);
-        }
+        // Заказной поворот превью: показываем макет так, как он физически
+        // ляжет на материал с учётом фиксированного поворота станка.
+        // Команды реза при этом не меняются (см. pointsForCommands).
+        const originalDisplay = machineOrient(placedOriginal, placedOriginal);
+        const cutDisplay = machineOrient(placedCut, placedOriginal);
         // Лист на холсте — портретно (как в программе: X — ширина, Y — подача).
         // Ориентация макета задаётся настройкой «Поворот»: 0° — горизонтально,
         // 90° — вертикально.

@@ -257,9 +257,9 @@
     }
 
     .drop-zone {
-      padding: 21px;
+      padding: 10px 12px;
       border: 1px dashed #9cb4ce;
-      border-radius: 11px;
+      border-radius: 9px;
       background: #f5f9ff;
       text-align: center;
       transition: border .15s, background .15s;
@@ -272,14 +272,15 @@
 
     .drop-zone strong {
       display: block;
-      margin-bottom: 4px;
+      margin-bottom: 1px;
       color: var(--text);
+      font-size: 12px;
     }
 
     .drop-zone span {
       display: block;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
     }
 
     .drop-zone input {
@@ -288,8 +289,9 @@
 
     .drop-zone label {
       display: inline-flex;
-      margin-top: 12px;
+      margin-top: 5px;
       color: var(--blue);
+      font-size: 12px;
       font-weight: 700;
       cursor: pointer;
     }
@@ -324,20 +326,6 @@
 
     .sidebar-left .section:first-child {
       padding-top: 16px;
-    }
-
-    .sidebar-left .top-actions {
-      display: block;
-      padding: 16px 0 15px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .sidebar-left .top-actions .device-status {
-      margin-bottom: 11px;
-    }
-
-    .sidebar-left .top-actions .outline {
-      width: 100%;
     }
 
     .sidebar-right .section-title {
@@ -524,26 +512,6 @@
       white-space: pre-wrap;
     }
 
-    .stats {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      margin-top: 11px;
-    }
-
-    .stat {
-      padding: 4px 8px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      color: var(--muted);
-      background: #fbfdff;
-      font-size: 11px;
-    }
-
-    .stat strong {
-      color: var(--text);
-    }
-
     .warning {
       padding: 10px 11px;
       border: 1px solid #f3d8aa;
@@ -618,6 +586,9 @@
     }
 
     .canvas-wrap {
+      /* Блочный поток: grid-центрирование ломает height:100% у svg —
+         элемент раздувается по пропорции viewBox и уходит за нижний край. */
+      display: block;
       height: calc(100% - 103px);
       min-height: 0;
       padding: 0;
@@ -643,10 +614,6 @@
     .canvas-foot {
       min-height: 45px;
       background: #fff;
-    }
-
-    .sidebar-left .top-actions {
-      padding: 16px 18px;
     }
 
     .sidebar .section {
@@ -797,22 +764,19 @@
           <p>Рабочее место для точной резки</p>
         </div>
       </div>
+      <div class="top-actions">
+        <div class="device-status"><span id="statusLight" class="status-light"></span><span id="statusText">Плоттер не
+            подключён</span></div><button id="connectBtn" class="outline">Подключить COM</button>
+      </div>
     </header>
     <div class="workspace">
       <aside class="card sidebar sidebar-left">
-        <div class="top-actions">
-          <div class="device-status"><span id="statusLight" class="status-light"></span><span id="statusText">Плоттер не
-              подключён</span></div><button id="connectBtn" class="outline">Подключить COM</button>
-        </div>
         <section class="section">
           <h2 class="section-title">01 / Контур <small>SVG</small></h2>
           <div id="dropZone" class="drop-zone"><strong>Перетащите SVG сюда</strong><span>или выберите файл с
               компьютера</span><label for="fileInput">Выбрать файл</label><input id="fileInput" type="file"
               accept=".svg,image/svg+xml" /></div>
           <div id="fileName" class="file-name">Тестовый контур</div>
-          <div id="stats" class="stats"><span class="stat"><strong id="pathCount">1</strong> контур</span><span
-              class="stat"><strong id="segmentCount">4</strong> сегмента</span><span class="stat"><strong
-                id="designSize">80 × 50</strong> мм</span></div>
         </section>
         <section class="section">
           <h2 class="section-title">02 / Лист <small>размещение</small></h2>
@@ -842,6 +806,14 @@
                 фигуры — рез в самом конце</em></span></label>
           <div class="field" style="margin-top: 11px"><label for="trimMargin">Отступ рамки, мм</label><input
               id="trimMargin" type="number" value="5" min="0" max="200" step="0.5" /></div>
+          <div class="grid2">
+            <div class="field"><label for="insetRight">Отступ справа, мм</label><input id="insetRight" type="number"
+                value="0" min="0" max="2000" step="0.5" /></div>
+            <div class="field"><label for="insetBottom">Отступ снизу, мм</label><input id="insetBottom" type="number"
+                value="0" min="0" max="2000" step="0.5" /></div>
+          </div>
+          <p class="hint">Фигура стоит с отступами от правого и нижнего края листа. При включённой рамке отступы
+            автоматически не меньше отступа рамки — рамка всегда умещается на листе.</p>
         </section>
       </aside>
       <section class="card canvas-card">
@@ -850,8 +822,8 @@
             <h2>Предпросмотр макета</h2><span id="previewMeta" class="subtle">Тестовый контур готов</span>
           </div><span id="unitMeta" class="subtle">мм</span>
         </div>
-        <div id="canvasWrap" class="canvas-wrap"><svg id="preview" viewBox="0 0 1000 700" role="img"
-            aria-label="Предпросмотр резки SVG">
+        <div id="canvasWrap" class="canvas-wrap"><svg id="preview" viewBox="0 0 1000 700"
+            preserveAspectRatio="xMidYMax meet" role="img" aria-label="Предпросмотр резки SVG">
             <defs>
               <pattern id="gridPattern" patternUnits="userSpaceOnUse" width="28" height="28"><path id="gridPatternPath"
                   class="grid-line" d="M 28 0 L 0 0 0 28" /></pattern>
@@ -928,6 +900,8 @@
       const num = (id, fallback) => { const value = Number($(id).value); return Number.isFinite(value) ? value : fallback; };
       const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
       const fmt = value => Number(value.toFixed(2));
+      // «1 контур / 3 контура / 5 контуров» для статусной строки.
+      const plural = (n, one, few, many) => { const m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return one; if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few; return many; };
       const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
       const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
       const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
@@ -982,6 +956,10 @@
       // Текущие настройки интерфейса, собранные в один объект.
       // ============================================================
       function currentSettings() {
+        // Отступы фигуры от правого/нижнего края листа. При включённой рамке
+        // они автоматически не меньше отступа рамки — иначе рамка выйдет за
+        // пределы материала.
+        const frameExtra = $('trimFrame').checked ? Math.max(0, num('trimMargin', 5)) : 0;
         return {
           sheetW: num('sheetWidth', 210),
           sheetH: num('sheetHeight', 297),
@@ -989,6 +967,8 @@
           // пропорцию и в расчёте не участвует.
           scale: clamp(num('designWidth', state.designWidth) / Math.max(state.designWidth, .001), .01, 100),
           rotation: Number($('rotation').value),
+          insetRight: Math.max(Math.max(0, num('insetRight', 0)), frameExtra),
+          insetBottom: Math.max(Math.max(0, num('insetBottom', 0)), frameExtra),
           fit: $('fitToSheet').checked,
           resolution: num('resolution', 40),
           knifeOffset: Math.max(0, num('knifeOffset', .52)),
@@ -1007,7 +987,7 @@
       function transformedContours() {
         const s = currentSettings();
         const rawW = state.designWidth * s.scale, rawH = state.designHeight * s.scale;
-        const fit = s.fit ? Math.min((s.sheetW - 20) / Math.max(rawW, .001), (s.sheetH - 20) / Math.max(rawH, .001), 1) : 1;
+        const fit = s.fit ? Math.min(Math.max(.01, s.sheetW - 20 - s.insetRight) / Math.max(rawW, .001), Math.max(.01, s.sheetH - 20 - s.insetBottom) / Math.max(rawH, .001), 1) : 1;
         return state.contours.map(contour => ({
           ...contour,
           points: normalizeContour(contour).points.map(p => [p[0] * s.scale * fit, p[1] * s.scale * fit])
@@ -1016,8 +996,10 @@
 
       // ============================================================
       // Ориентация на станке и привязка контура к правому нижнему углу
-      // листа. Собирается из настроек «Поворот» и «Зеркало» и применяется
-      // ОДИНАКОВО для превью и для команд реза: что на холсте — то и режем.
+      // листа с отступами insetRight/insetBottom (угол листа — точка
+      // старта каретки). Собирается из настроек «Поворот» и «Зеркало» и
+      // применяется ОДИНАКОВО для превью и для команд реза: что на холсте —
+      // то и режем.
       // ============================================================
       function parseOrientation() {
         const rot = Number($('rotation').value);
@@ -1050,7 +1032,7 @@
           if (o.swap) { const t = u; u = v; v = t; }
           if (o.flipX) u = 1 - u;
           if (o.flipY) v = 1 - v;
-          return [s.sheetW - outW + u * outW, s.sheetH - outH + v * outH];
+          return [s.sheetW - s.insetRight - outW + u * outW, s.sheetH - s.insetBottom - outH + v * outH];
         })}));
       }
 
@@ -1082,7 +1064,7 @@
         const rot = ([x, y]) => [cx + (y - cy), cy - (x - cx)];
         let rx1 = -Infinity, ry1 = -Infinity;
         for (const [x, y] of all.map(rot)) { if (x > rx1) rx1 = x; if (y > ry1) ry1 = y; }
-        const dx = s.sheetW - rx1, dy = s.sheetH - ry1;
+        const dx = s.sheetW - s.insetRight - rx1, dy = s.sheetH - s.insetBottom - ry1;
         return contours.map(c => ({ ...c, points: c.points.map(p => { const [rx, ry] = rot(p); return [rx + dx, ry + dy]; }) }));
       }
 
@@ -1211,9 +1193,10 @@
 
       // ============================================================
       // HPGL. Относительный режим PR: ноль отсчёта — текущее положение
-      // каретки, и фигура кладётся так, что с кареткой совпадает её правый
-      // нижний угол. Поэтому рез начинается с хода с поднятым ножом от
-      // каретки до точки входа первого контура — перо опускается уже там.
+      // каретки, с которым совпадает правый нижний угол ЛИСТА. Фигура
+      // стоит внутри листа с отступами от краёв (при рамке — не меньше
+      // отступа рамки), поэтому рез начинается с хода с поднятым ножом
+      // от каретки до точки входа первого контура — перо опускается там.
       // ============================================================
       function hpgl(contours) {
         const s = currentSettings();
@@ -1345,7 +1328,9 @@
         // 90° — вертикально.
         const previewScale = Math.min(876 / Math.max(s.sheetW, .001), 610 / Math.max(s.sheetH, .001));
         const previewW = s.sheetW * previewScale, previewH = s.sheetH * previewScale;
-        const previewX = (1000 - previewW) / 2, previewY = (700 - previewH) / 2;
+        // Лист прижат к низу viewBox: 30 единиц под ним — запас, чтобы нижняя
+        // кромка с подписью всегда была видна; всё свободное место уходит вверх.
+        const previewX = (1000 - previewW) / 2, previewY = 700 - 30 - previewH;
         const map = p => [previewX + p[0] * previewScale, previewY + p[1] * previewScale];
         // Сетка рабочего стола: клетки 1 см, выровнены по правому нижнему
         // углу листа. Сетка живёт внутри SVG, поэтому при панорамировании
@@ -1398,11 +1383,9 @@
         $('previewMeta').textContent = `${previewContours.length} контур(а) · компенсация ${fmt(s.knifeOffset)} мм · overcut ${fmt(s.overcut)} мм`;
         const degree = $('rotation').value;
         const mirrorTxt = $('mirror').checked ? ' · зеркало' : '';
-        $('coordinateCaption').textContent = `Рез: ${degree}°${mirrorTxt} · каретка стартует с правого нижнего угла фигуры`;
+        $('coordinateCaption').textContent = `Рез: ${degree}°${mirrorTxt} · каретка — правый нижний угол листа`;
         const allSegments = state.contours.reduce((sum, c) => sum + Math.max(0, c.points.length - 1) + (c.closed ? 1 : 0), 0);
-        $('pathCount').textContent = state.contours.length;
-        $('segmentCount').textContent = allSegments;
-        $('designSize').textContent = `${fmt(state.designWidth)} × ${fmt(state.designHeight)}`;
+        $('fileCaption').textContent = `${state.fileName} · ${state.contours.length} ${plural(state.contours.length, 'контур', 'контура', 'контуров')} · ${allSegments} ${plural(allSegments, 'сегмент', 'сегмента', 'сегментов')}`;
       }
 
       // ============================================================
@@ -1480,7 +1463,6 @@
             $('designHeight').value = fmt(imported.height);
             state.fileName = file.name;
             $('fileName').textContent = file.name;
-            $('fileCaption').textContent = `SVG загружен · ${state.contours.length} контур(а) · готово к подготовке траектории`;
             $('emptyState').classList.remove('visible');
             log(`SVG импортирован: ${file.name}; найдено контуров: ${state.contours.length}.`);
             renderPreview();
@@ -1499,7 +1481,6 @@
         $('fileName').textContent = state.fileName;
         $('designWidth').value = state.designWidth;
         $('designHeight').value = state.designHeight;
-        $('fileCaption').textContent = 'Встроенный тест «буква R» 20 × 30 мм · каретка стартует с правого нижнего угла фигуры';
         $('fileInput').addEventListener('change', event => importSvg(event.target.files[0]));
         $('dropZone').addEventListener('dragover', event => { event.preventDefault(); $('dropZone').classList.add('dragover'); });
         $('dropZone').addEventListener('dragleave', () => $('dropZone').classList.remove('dragover'));
@@ -1520,7 +1501,7 @@
         };
         $('designWidth').addEventListener('input', () => { syncDesignSize('designWidth'); renderPreview(); });
         $('designHeight').addEventListener('input', () => { syncDesignSize('designHeight'); renderPreview(); });
-        ['sheetWidth', 'sheetHeight', 'rotation', 'mirror', 'fitToSheet', 'trimFrame', 'trimMargin', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
+        ['sheetWidth', 'sheetHeight', 'rotation', 'mirror', 'fitToSheet', 'trimFrame', 'trimMargin', 'insetRight', 'insetBottom', 'knifeOffset', 'overcut', 'leadIn', 'tolerance', 'showStart', 'resolution'].forEach(id => $(id).addEventListener('input', renderPreview));
 
         // Панорамирование и zoom холста.
         const canvas = $('canvasWrap'), preview = $('preview');

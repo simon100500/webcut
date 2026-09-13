@@ -525,6 +525,24 @@
       font-size: 15px;
     }
 
+    .jog-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .jog-pad button {
+      min-height: 40px;
+      padding: 6px 0;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .jog-pad .jog-up {
+      grid-column: 2;
+    }
+
     button {
       min-height: 38px;
       padding: 8px 13px;
@@ -959,6 +977,17 @@
                 <option>115200</option>
               </select></div>
           </div>
+          <div class="divider"></div>
+          <div class="field"><label for="jogSteps">Цифровое управление, шагов за нажатие</label><input id="jogSteps"
+              type="number" value="800" min="1" max="10000" step="1"></div>
+          <div class="jog-pad">
+            <button id="jogUp" class="outline jog-up" type="button" title="Нож вверх по листу (материал вниз)">↑</button>
+            <button id="jogLeft" class="outline" type="button" title="Каретка влево (парковка вернёт её назад)">←</button>
+            <button id="jogDown" class="outline" type="button" title="Нож вниз по листу (материал вверх)">↓</button>
+            <button id="jogRight" class="outline" type="button" title="Каретка вправо (парковка вернёт её назад)">→</button>
+          </div>
+          <p class="hint">Шаг зависит от «Шага координат»: при 0,025 мм 800 шагов = 20 мм. Ходы идут от текущего
+            положения ножа.</p>
           <div class="button-row" style="margin-top: 4px"><button id="previewBtn" class="secondary">Показать команды
               HPGL</button><button id="moveTestBtn" class="secondary" title="Абсолютные ходы по 20 мм: каретка влево, подача вниз листа">Тест
               хода</button></div>
@@ -1256,16 +1285,15 @@
       // HPGL. Прошивка станка игнорирует относительный режим PR (проверено
       // тестом хода) и работает только в АБСОЛЮТНЫХ координатах. Ноль
       // выставляет IN в точке каретки: пользователь паркует каретку
-      // в перекрестие — и все координаты считаются от него. Оси:
-      // +X каретки — влево на превью (X = W − x), +Y подачи — вверх
-      // по листу (Y = H − y): чем точка дальше от перекрестия влево-вверх,
-      // тем больше положительные координаты. Команда PA на этой прошивке
-      // означает «вернуться в ноль», поэтому в потоке её нет.
+      // в перекрестие — и все координаты считаются от него. Порядок
+      // аргументов PU/PD: ПЕРВЫЙ — подача, + вверх по листу (Y = H − y),
+      // ВТОРОЙ — каретка, + влево на превью (X = W − x). Команда PA на этой
+      // прошивке означает «вернуться в ноль», поэтому в потоке её нет.
       // ============================================================
       function hpgl(contours) {
         const s = currentSettings();
         const lines = ['IN;', 'SP1;'];
-        const toMachine = p => [s.sheetW - p[0], s.sheetH - p[1]];
+        const toMachine = p => [s.sheetH - p[1], s.sheetW - p[0]];
         const deviceContours = contours
           .map(c => dedupeDevicePoints(c.points.map(p => toDevicePoint(toMachine(p), s))))
           .filter(points => points.length);
@@ -1621,6 +1649,25 @@
           try { await state.writer.write(new TextEncoder().encode(`${commands}\r\n`)); }
           catch (error) { log(`Ошибка отправки: ${error.message}`); }
         });
+        // Цифровое управление: ходы от текущего положения ножа. Каждый нажим
+        // шлёт свой мини-поток: IN пересаживает ноль в текущую точку, поэтому
+        // PU содержит ровно шаг смещения. Формат команд — тот же, что в
+        // тесте хода (IN;SP1;PU…;SP0;): станок отвечает именно на него.
+        // Порядок аргументов PU: первый — подача (вверх/вниз по листу),
+        // второй — каретка (влево/вправо). Подача после хода остаётся на
+        // новом месте; каретку прошивка в конце возвращает парковкой назад.
+        const jog = async (feed, carriage) => {
+          if (!state.writer) { log('Цифровое управление: сначала подключите COM-порт.'); return; }
+          const steps = Math.max(1, Math.round(num('jogSteps', 800)));
+          const commands = `IN;SP1;PU${feed * steps},${carriage * steps};SP0;`;
+          log(`Сдвиг: подача ${feed * steps}, каретка ${carriage * steps} шагов. Команды: ${commands}`);
+          try { await state.writer.write(new TextEncoder().encode(`${commands}\r\n`)); }
+          catch (error) { log(`Ошибка отправки: ${error.message}`); }
+        };
+        $('jogUp').addEventListener('click', () => jog(1, 0));
+        $('jogDown').addEventListener('click', () => jog(-1, 0));
+        $('jogLeft').addEventListener('click', () => jog(0, 1));
+        $('jogRight').addEventListener('click', () => jog(0, -1));
         // Модалка настроек: открытие из шапки, закрытие по кнопке, фону и Esc.
         const modal = $('settingsModal');
         $('settingsBtn').addEventListener('click', () => { modal.hidden = false; });

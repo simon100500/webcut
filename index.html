@@ -1103,24 +1103,17 @@
       }
 
       // ============================================================
-      // Посадочная ориентация команд реза. Станок, кроме фиксированного
-      // поворота, даёт ещё и фиксированное зеркало, поэтому flipY инвертируется
-      // относительно ориентации превью. При 0° это даёт { swap, flipX, flipY } —
-      // ориентацию, выверенную на станке ещё в MACHINE_ORIENTATION.
+      // Точки команд реза. Это ТЕ ЖЕ точки, что рисует превью: посадка 0°
+      // (parseOrientation) плюс заказной поворот станка machineOrient.
+      // Благодаря этому ход от каретки до точки входа и зелёные точки
+      // старта на картинке в точности совпадают с командами (WYSIWYG),
+      // а разворот в оси станка делает hpgl.
       // ============================================================
-      function parseCutOrientation() {
-        const o = parseOrientation();
-        return { swap: o.swap, flipX: o.flipX, flipY: !o.flipY };
+      function pointsForCommands() {
+        const { list, ref } = contoursForCut();
+        const placedGrid = machinePlace([ref], [ref]);
+        return machineOrient(machinePlace(list, [ref]), placedGrid);
       }
-
-      // ============================================================
-      // Заказной поворот превью. Станок кладёт рез на материал с фиксированным
-      // поворотом на 90° против часовой, поэтому макет на превью показывается
-      // с этим же поворотом (поворот вокруг центра + прижим к нижнему краю
-      // листа по габариту referenceContours) — картинка совпадает с физическим
-      // результатом. К командам реза НЕ применяется: они уже в посадочной
-      // ориентации (parseCutOrientation в pointsForCommands).
-      // ============================================================
       function machineOrient(contours, referenceContours) {
         const s = currentSettings();
         const all = referenceContours.flatMap(c => c.points);
@@ -1259,31 +1252,30 @@
 
       // ============================================================
       // HPGL. Относительный режим PR: ноль отсчёта — текущее положение
-      // каретки, с которым совпадает правый нижний угол ЛИСТА. Фигура
-      // стоит внутри листа с отступами от краёв (при рамке — не меньше
-      // отступа рамки), поэтому рез начинается с хода с поднятым ножом
-      // от каретки до точки входа первого контура — перо опускается там.
+      // каретки, с которым совпадает перекрестие (правый нижний угол листа
+      // на превью). Точки приходят в системе превью, поэтому первый ход
+      // с поднятым ножом — это «отъезд» от каретки ровно до зелёной точки
+      // старта, как на картинке. Оси станка повёрнуты к листу на 90°
+      // и зеркалятся (выверено на станке): ход каретки X идёт вверх листа,
+      // подача Y — влево, то есть (x, y) листа → (H − y, W − x).
       // ============================================================
       function hpgl(contours) {
         const s = currentSettings();
         const lines = ['IN;', 'SP1;'];
+        const toMachine = p => [s.sheetH - p[1], s.sheetW - p[0]];
         const deviceContours = contours
-          .map(c => dedupeDevicePoints(c.points.map(p => toDevicePoint(p, s))))
+          .map(c => dedupeDevicePoints(c.points.map(p => toDevicePoint(toMachine(p), s))))
           .filter(points => points.length);
         if (!deviceContours.length) { lines.push('PA;', 'SP0;'); return lines.join('\n'); }
-        // machinePlace прижимает фигуру к правому нижнему углу листа, так что
-        // её угол в шагах устройства — это (sheetW, sheetH) · разрешение.
-        const origin = [Math.round(s.sheetW * s.resolution), Math.round(s.sheetH * s.resolution)];
         let cursor = [0, 0];
         lines.push('PR;');
         deviceContours.forEach(points => {
-          const local = points.map(p => [p[0] - origin[0], p[1] - origin[1]]);
-          const startDelta = [local[0][0] - cursor[0], local[0][1] - cursor[1]];
+          const startDelta = [points[0][0] - cursor[0], points[0][1] - cursor[1]];
           if (startDelta[0] || startDelta[1]) lines.push(`PU${startDelta[0]},${startDelta[1]};`);
-          const deltas = local.slice(1).map((p, i) => [p[0] - local[i][0], p[1] - local[i][1]]);
+          const deltas = points.slice(1).map((p, i) => [p[0] - points[i][0], p[1] - points[i][1]]);
           if (deltas.length) lines.push(`PD${deltas.map(d => d.join(',')).join(',')};`);
           lines.push('PU1,0;');
-          cursor = [local[local.length - 1][0] + 1, local[local.length - 1][1]];
+          cursor = [points[points.length - 1][0] + 1, points[points.length - 1][1]];
         });
         lines.push('PA;', 'SP0;');
         return lines.join('\n');
@@ -1352,14 +1344,6 @@
       // ============================================================
       // Генерация команд и их просмотр в журнале.
       // ============================================================
-      function pointsForCommands() {
-        const { list, ref } = contoursForCut();
-        // Посадочная ориентация с компенсацией зеркала станка: при 0° рез
-        // ложится так, как показывает превью — без зеркала и с верным поворотом.
-        // machineOrient сюда НЕ применяется — станок сам даёт свои 90°.
-        // Опорный прямоугольник — габарит всей сетки экземпляров.
-        return machinePlace(list, [ref], parseCutOrientation());
-      }
       function createCommands() { return hpgl(pointsForCommands()); }
       function showCommands() {
         state.commandText = createCommands();

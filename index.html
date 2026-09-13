@@ -819,6 +819,7 @@
           <h1>Cutline</h1>
           <p>Рабочее место для точной резки</p>
         </div>
+        <button id="connectBtn" class="outline">Подключить COM</button>
       </div>
       <div class="header-center">
         <div id="dropZone" class="drop-zone"><strong>Перетащите SVG сюда</strong><span>или</span><label
@@ -835,7 +836,7 @@
           </svg>Настройки
         </button>
         <div class="device-status"><span id="statusLight" class="status-light"></span><span id="statusText">Плоттер не
-            подключён</span></div><button id="connectBtn" class="outline">Подключить COM</button>
+            подключён</span></div>
       </div>
     </header>
     <div class="workspace">
@@ -959,7 +960,8 @@
               </select></div>
           </div>
           <div class="button-row" style="margin-top: 4px"><button id="previewBtn" class="secondary">Показать команды
-              HPGL</button></div>
+              HPGL</button><button id="moveTestBtn" class="secondary" title="Абсолютные ходы по 20 мм: каретка влево, подача вниз листа">Тест
+              хода</button></div>
           <div id="log" class="log" style="margin-top: 10px">Готово. Импортируйте SVG или проверьте встроенный
             квадрат.</div>
         </div>
@@ -1251,33 +1253,28 @@
       }
 
       // ============================================================
-      // HPGL. Относительный режим PR: ноль отсчёта — текущее положение
-      // каретки, с которым совпадает перекрестие (правый нижний угол листа
-      // на превью). Точки приходят в системе превью, поэтому первый ход
-      // с поднятым ножом — это «отъезд» от каретки ровно до зелёной точки
-      // старта, как на картинке. Оси станка повёрнуты к листу на 90°
-      // и зеркалятся (выверено на станке): ход каретки X идёт вверх листа,
-      // подача Y — влево, то есть (x, y) листа → (H − y, W − x).
+      // HPGL. Прошивка станка игнорирует относительный режим PR (проверено
+      // тестом хода) и работает только в АБСОЛЮТНЫХ координатах. Ноль
+      // выставляет IN в точке каретки: пользователь паркует каретку
+      // в перекрестие — и все координаты считаются от него. Оси:
+      // +X каретки — влево на превью (X = W − x), +Y подачи — вверх
+      // по листу (Y = H − y): чем точка дальше от перекрестия влево-вверх,
+      // тем больше положительные координаты. Команда PA на этой прошивке
+      // означает «вернуться в ноль», поэтому в потоке её нет.
       // ============================================================
       function hpgl(contours) {
         const s = currentSettings();
         const lines = ['IN;', 'SP1;'];
-        const toMachine = p => [s.sheetH - p[1], s.sheetW - p[0]];
+        const toMachine = p => [s.sheetW - p[0], s.sheetH - p[1]];
         const deviceContours = contours
           .map(c => dedupeDevicePoints(c.points.map(p => toDevicePoint(toMachine(p), s))))
           .filter(points => points.length);
-        if (!deviceContours.length) { lines.push('PA;', 'SP0;'); return lines.join('\n'); }
-        let cursor = [0, 0];
-        lines.push('PR;');
+        if (!deviceContours.length) { lines.push('SP0;'); return lines.join('\n'); }
         deviceContours.forEach(points => {
-          const startDelta = [points[0][0] - cursor[0], points[0][1] - cursor[1]];
-          if (startDelta[0] || startDelta[1]) lines.push(`PU${startDelta[0]},${startDelta[1]};`);
-          const deltas = points.slice(1).map((p, i) => [p[0] - points[i][0], p[1] - points[i][1]]);
-          if (deltas.length) lines.push(`PD${deltas.map(d => d.join(',')).join(',')};`);
-          lines.push('PU1,0;');
-          cursor = [points[points.length - 1][0] + 1, points[points.length - 1][1]];
+          lines.push(`PU${points[0][0]},${points[0][1]};`);
+          if (points.length > 1) lines.push(`PD${points.slice(1).map(p => p.join(',')).join(',')};`);
         });
-        lines.push('PA;', 'SP0;');
+        lines.push('SP0;');
         return lines.join('\n');
       }
 
@@ -1610,6 +1607,20 @@
         $('connectBtn').addEventListener('click', connectSerial);
         $('sendBtn').addEventListener('click', sendCommands);
         $('previewBtn').addEventListener('click', showCommands);
+        // Тест хода: одна диагональ 20×20 мм — ровно как «отъезд» в реальном
+        // резе: каретка на 20 мм влево и материал на 20 мм вниз одним ходом
+        // (нож уходит вверх по листу). Завершает поток SP0: без него прошивка
+        // не заканчивает задание и моторы гудят под током до ресета. Возврат
+        // каретки в ноль после SP0 — штатный парковочный ход прошивки в конце
+        // задания, перо в этот момент уже поднято.
+        $('moveTestBtn').addEventListener('click', async () => {
+          if (!state.writer) { log('Тест хода: сначала подключите COM-порт.'); return; }
+          const steps = Math.round(20 * num('resolution', 40));
+          const commands = `IN;SP1;PU${steps},${steps};SP0;`;
+          log(`Тест хода: диагональ — каретка на 20 мм влево, нож на 20 мм вверх по листу; в конце каретка вернётся в ноль (штатная парковка прошивки, перо поднято). Команды: ${commands}`);
+          try { await state.writer.write(new TextEncoder().encode(`${commands}\r\n`)); }
+          catch (error) { log(`Ошибка отправки: ${error.message}`); }
+        });
         // Модалка настроек: открытие из шапки, закрытие по кнопке, фону и Esc.
         const modal = $('settingsModal');
         $('settingsBtn').addEventListener('click', () => { modal.hidden = false; });
